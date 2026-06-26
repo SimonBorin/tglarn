@@ -48,16 +48,17 @@ Current status: project scaffold and imported upstream source are in place. The 
 
 Expected local prerequisites for the implementation phase:
 
-- Python 3.11+
 - Podman
 - Telegram bot token from BotFather
-- MongoDB or another persistence backend, depending on the final adapter design
+- MongoDB-compatible database; local MVP uses MongoDB in Podman, future deployment may use Amazon DocumentDB
+
+Python and database binaries should not be installed directly on the VM for normal runtime. The bot and supporting services should run in containers.
 
 Create local secrets outside git, for example in `.env`:
 
 ```bash
 BOT_TOKEN=replace-with-telegram-bot-token
-MONGO_PASS=replace-with-local-password
+MONGO_URI=mongodb://tglarn_user:replace-with-local-password@mongo:27017/tglarn?authSource=admin&retryWrites=false
 ```
 
 Do not commit real tokens or passwords.
@@ -70,7 +71,7 @@ The playable bot runtime is not implemented yet. The intended MVP run path is:
 podman compose -f deploy/compose.yml up -d
 ```
 
-This command will be added and validated when the bot service, persistence service, and deployment files are implemented.
+This command will be added and validated when the bot service, persistence service, and deployment files are implemented. See `deploy/README.md` for the container strategy and Kubernetes-readiness notes.
 
 ## Required Challenge Documents
 
