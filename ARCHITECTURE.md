@@ -7,8 +7,8 @@ Planned stack:
 - Language: Python for Telegram bot and adapter code.
 - Upstream game source: C ReLarn source imported under `vendor/relarn/`.
 - Bot API: Telegram Bot API through a Python Telegram library.
-- Persistence: MongoDB or a simple file/database store, final choice to be validated during implementation.
-- Runtime: Podman containers on a VM.
+- Persistence: MongoDB-compatible document database for MVP, with a future path to Amazon DocumentDB.
+- Runtime: container-first deployment with Podman on a VM for MVP; Kubernetes-compatible structure later.
 - CI/CD: GitLab CI for tests and optional deployment.
 - Documentation: Markdown in repository root.
 
@@ -71,6 +71,16 @@ Owns automated tests:
 - session isolation tests;
 - CI checks.
 
+## Database Decision
+
+The selected persistence layer is a MongoDB-compatible document database. The MVP will run MongoDB in a neighboring Podman container. The bot will connect through a `MONGO_URI`, so the same application code can later point at a separate managed database such as Amazon DocumentDB.
+
+This is a better fit than SQLite for the target architecture because the bot should not depend on a local database file once deployed beyond the first VM. It is also simpler than PostgreSQL/Aurora for this project because player sessions and game state are mutable JSON-like documents and do not need relational joins.
+
+To keep the future DocumentDB path realistic, the adapter should use conservative MongoDB operations: keyed lookups, single-document updates, explicit indexes, append-only turn logs, and `retryWrites=false` in DocumentDB connection strings. Avoid advanced MongoDB features unless they are checked against DocumentDB compatibility.
+
+More detail is in `docs/DATABASE.md`.
+
 ## Major Design Decisions
 
 1. Keep upstream ReLarn in `vendor/relarn/` rather than mixing it with bot code.
@@ -88,6 +98,10 @@ Owns automated tests:
 4. Prefer a small adapter boundary before deep porting.
 
    Reason: the fastest path to a complete challenge project is to expose a playable slice, then iterate.
+
+5. Run everything in containers.
+
+   Reason: the project should be deployable on a VM without hand-installed services and should have a clear path to Kubernetes later. The MVP should use Podman Compose with separate bot and MongoDB containers.
 
 ## AI Tooling Used
 

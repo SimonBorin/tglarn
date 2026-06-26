@@ -25,10 +25,10 @@ Detailed original rules remain in the imported upstream documentation under `ven
 - Import and preserve upstream ReLarn source and license notices.
 - Define a clean project structure for upstream code, game adapter, Telegram bot, deployment, docs, and tests.
 - Build a minimal Telegram bot flow that supports one direct-chat player session per Telegram user.
-- Persist player session state server-side.
+- Persist player session state server-side in a MongoDB-compatible document database.
 - Provide enough commands to start a new game, view the current game screen/status, submit commands, and continue playing.
 - Add automated smoke tests for session isolation and adapter behavior.
-- Provide Podman-based local/deployment setup.
+- Provide Podman-based local/deployment setup where all runtime services run in containers.
 - Keep the required challenge documentation up to date.
 
 ### Out of Scope for MVP
@@ -49,13 +49,15 @@ Detailed original rules remain in the imported upstream documentation under `ven
 6. Bot runtime secrets are provided via environment variables and are never committed.
 7. The original ReLarn source remains separated under `vendor/relarn/`.
 8. Third-party license notices remain available in the repository.
-9. The project can be run locally or on a VM using Podman.
+9. The project can be run locally or on a VM using Podman with MongoDB in a neighboring container.
 10. The repository contains `README.md`, `SPEC.md`, `ARCHITECTURE.md`, and `RETROSPECTIVE.md`.
 
 ## Non-Functional Requirements
 
 - The code should favor small, testable adapter boundaries over direct bot-to-game coupling.
 - The runtime should be restartable without losing persisted sessions.
+- All runtime services should run in containers; no manually installed bot or database service should be required on the VM.
+- Container design should keep a future Kubernetes deployment path open.
 - The project should be understandable to reviewers who have not played ReLarn.
 - Documentation should record AI tooling decisions, prompts/workflow patterns, and lessons learned.
 
@@ -75,6 +77,7 @@ Detailed original rules remain in the imported upstream documentation under `ven
 - The bot returns game output after each supported command.
 - Two different Telegram users can play without state leaking between sessions.
 - Basic automated tests pass in CI.
+- The bot and database run through Podman containers for local/VM deployment.
 
 ### Final Challenge Acceptance
 
