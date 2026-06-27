@@ -1,0 +1,128 @@
+"""Telegram photo animation assets for splash and game-over credits."""
+
+from __future__ import annotations
+
+import tempfile
+from importlib.resources import files
+from pathlib import Path
+
+SPLASH_DELAY_SECONDS = 0.5
+CREDITS_DELAY_SECONDS = 1.2
+
+SPLASH_CAPTIONS = (
+    "Loading LARN [#----]",
+    "Loading LARN [##---]",
+    "Loading LARN [###--]",
+    "Loading LARN [####-]",
+    "Loading LARN [#####]",
+)
+
+CREDIT_TEXTS = (
+    "TGLarn Bot Creator\nSimon.A.Borin@ringcentral.com",
+    "Created by Codex",
+    "Original Larn\nNoah Morgan",
+    "ULarn\nPhil Cordier",
+    "iLarn\nBridgit Spitznagel / i0lanthe",
+    "ReLarn\nChris Reuter",
+    "libfov\nGreg McIntyre",
+    "Inconsolata Font\nRaph Levien and collaborators",
+    "Thanks for playing",
+)
+
+
+def splash_frame_paths() -> list[Path]:
+    source_path = _source_image_path()
+    cache_dir = _cache_dir("splash")
+    expected = [cache_dir / f"splash_{index:02d}.png" for index in range(1, 6)]
+    if all(path.exists() for path in expected):
+        return expected
+
+    from PIL import Image
+
+    with Image.open(source_path) as raw_image:
+        image = raw_image.convert("RGB")
+        width, height = image.size
+        for index, path in enumerate(expected, start=1):
+            reveal_width = round(width * index / len(expected))
+            frame = Image.new("RGB", (width, height), "black")
+            frame.paste(image.crop((0, 0, reveal_width, height)), (0, 0))
+            frame.save(path)
+    return expected
+
+
+def credits_frame_paths() -> list[Path]:
+    source_path = _source_image_path()
+    cache_dir = _cache_dir("credits")
+    expected = [cache_dir / f"credits_{index:02d}.png" for index in range(len(CREDIT_TEXTS))]
+    if all(path.exists() for path in expected):
+        return expected
+
+    from PIL import Image, ImageDraw, ImageFont
+
+    with Image.open(source_path) as raw_image:
+        base = raw_image.convert("RGBA")
+        font_title = _load_font(ImageFont, 34)
+        font_body = _load_font(ImageFont, 26)
+        for index, text in enumerate(CREDIT_TEXTS):
+            frame = base.copy()
+            overlay = Image.new("RGBA", frame.size, (0, 0, 0, 105))
+            frame.alpha_composite(overlay)
+
+            draw = ImageDraw.Draw(frame)
+            title = "GAME OVER" if index == 0 else "CREDITS"
+            _draw_centered_text(draw, frame.size, title, font_title, y=44)
+            _draw_centered_text(draw, frame.size, text, font_body, y=frame.size[1] - 178)
+            frame.convert("RGB").save(expected[index])
+    return expected
+
+
+def splash_image_path() -> Path:
+    return _source_image_path()
+
+
+def _source_image_path() -> Path:
+    return Path(files("tglarn_bot").joinpath("assets/larn_01.png"))
+
+
+def _cache_dir(name: str) -> Path:
+    source_path = _source_image_path()
+    stat = source_path.stat()
+    cache_dir = (
+        Path(tempfile.gettempdir())
+        / f"tglarn-{name}-{stat.st_size}-{stat.st_mtime_ns}"
+    )
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
+
+def _load_font(image_font_module, size: int):
+    for font_name in ("DejaVuSans-Bold.ttf", "Arial.ttf"):
+        try:
+            return image_font_module.truetype(font_name, size)
+        except OSError:
+            continue
+    return image_font_module.load_default()
+
+
+def _draw_centered_text(draw, image_size: tuple[int, int], text, font, y: int) -> None:
+    x = image_size[0] // 2
+    bbox = draw.multiline_textbbox((0, 0), text, font=font, spacing=8, align="center")
+    width = bbox[2] - bbox[0]
+    position = (x - width // 2, y)
+    shadow_position = (position[0] + 2, position[1] + 2)
+    draw.multiline_text(
+        shadow_position,
+        text,
+        font=font,
+        fill=(0, 0, 0, 210),
+        spacing=8,
+        align="center",
+    )
+    draw.multiline_text(
+        position,
+        text,
+        font=font,
+        fill=(255, 232, 204, 255),
+        spacing=8,
+        align="center",
+    )
