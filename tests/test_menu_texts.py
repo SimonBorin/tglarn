@@ -87,7 +87,7 @@ def test_game_keyboard_contains_default_controls() -> None:
     texts = _button_texts(game_keyboard(response))
     callback_data = _button_callback_data(game_keyboard(response))
 
-    assert texts[:9] == ["NW", "N", "NE", "W", "Look", "E", "SW", "S", "SE"]
+    assert texts[:9] == ["NW", "N", "NE", "W", "Inspect", "E", "SW", "S", "SE"]
     assert "Spell" in texts
     assert "Menu" in texts
     assert "Wait" not in texts

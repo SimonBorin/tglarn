@@ -271,6 +271,12 @@ class RelarnProcessAdapter:
             "adapter": "relarn_process",
             "save_blob_b64": base_save,
         }
+        character = _state_character(state)
+        if character is not None:
+            prompt_state["character"] = character
+        viewport_origin = _state_viewport_origin(state, map_view)
+        if viewport_origin is not None:
+            prompt_state["viewport_origin"] = viewport_origin
         replay_keys = [key.encode("ascii") for key in trigger_keys]
         replay_keys.append(answer.encode("ascii"))
         if _prompt_requires_enter(pending_prompt):
@@ -313,7 +319,12 @@ class RelarnProcessAdapter:
             else:
                 save_blob = save_file.read_bytes()
 
-        screen, log, status = _render_display_lines(display_lines, map_view, display_cells)
+        screen, log, status = _render_display_lines(
+            display_lines,
+            map_view,
+            display_cells,
+            previous_viewport=_state_viewport_origin(state, map_view),
+        )
         if cycle_result.game_over:
             next_state: dict[str, Any] = {"adapter": "relarn_process", "game_over": True}
             character = _state_character(state)
@@ -340,6 +351,9 @@ class RelarnProcessAdapter:
         character = _state_character(state)
         if character is not None:
             next_state["character"] = character
+        viewport_origin = status.get("viewport_origin")
+        if isinstance(viewport_origin, dict):
+            next_state["viewport_origin"] = viewport_origin
         actions: list[GameAction] = []
         if prompt is not None and keys:
             base_save_b64 = _prompt_base_save_b64(state)
@@ -752,6 +766,20 @@ def _state_save_blob(state: dict[str, Any] | None) -> bytes | None:
     return base64.b64decode(encoded)
 
 
+def _state_viewport_origin(
+    state: dict[str, Any] | None,
+    map_view: MapView,
+) -> dict[str, Any] | None:
+    if not state or state.get("adapter") != "relarn_process":
+        return None
+    viewport = state.get("viewport_origin")
+    if not isinstance(viewport, dict):
+        return None
+    if viewport.get("map_view") != map_view:
+        return None
+    return viewport
+
+
 def _command_to_key(command: str) -> bytes | None:
     normalized = command.strip().lower()
     return _COMMAND_KEYS.get(normalized)
@@ -761,6 +789,7 @@ def _render_display_lines(
     lines: list[str],
     map_view: MapView,
     cells: list[list[_TerminalCell | None]] | None = None,
+    previous_viewport: dict[str, Any] | None = None,
 ) -> tuple[str, list[str], dict[str, Any]]:
     width, map_height = _VIEWPORTS[map_view]
     padded = lines + [""] * max(0, _TERMINAL_ROWS - len(lines))
@@ -782,8 +811,16 @@ def _render_display_lines(
         )
 
     player_x, player_y = _find_player(map_lines)
-    left = _crop_start(player_x, width, _TERMINAL_COLUMNS)
-    top = _crop_start(player_y, map_height, _MAP_ROWS)
+    level = _level_id_from_stats(stats_lines)
+    left, top = _viewport_origin_for_player(
+        player_x,
+        player_y,
+        width,
+        map_height,
+        map_view,
+        level,
+        previous_viewport,
+    )
 
     cropped_map: list[str] = []
     for row_index, line in enumerate(map_lines[top : top + map_height], start=top):
@@ -801,10 +838,76 @@ def _render_display_lines(
             "map_view": map_view,
             "screen_type": "map",
             "viewport": {"width": width, "height": map_height},
+            "viewport_origin": {
+                "left": left,
+                "top": top,
+                "level": level,
+                "map_view": map_view,
+            },
             "terminal": {"width": _TERMINAL_COLUMNS, "height": _TERMINAL_ROWS},
+            "level": level,
             "position": {"x": player_x, "y": player_y} if player_x >= 0 else {},
         },
     )
+
+
+def _level_id_from_stats(stats_lines: list[str]) -> str:
+    matches = re.findall(r"\bLV:\s*([A-Za-z0-9]+)", " ".join(stats_lines))
+    return matches[-1] if matches else "unknown"
+
+
+def _viewport_origin_for_player(
+    player_x: int,
+    player_y: int,
+    width: int,
+    height: int,
+    map_view: MapView,
+    level: str,
+    previous_viewport: dict[str, Any] | None,
+) -> tuple[int, int]:
+    if player_x < 0:
+        return 0, 0
+    previous_left: int | None = None
+    previous_top: int | None = None
+    if (
+        previous_viewport is not None
+        and previous_viewport.get("level") == level
+        and previous_viewport.get("map_view") == map_view
+    ):
+        previous_left = _coerce_int(previous_viewport.get("left"))
+        previous_top = _coerce_int(previous_viewport.get("top"))
+    return (
+        _pan_start(player_x, width, _TERMINAL_COLUMNS, previous_left),
+        _pan_start(player_y, height, _MAP_ROWS, previous_top),
+    )
+
+
+def _pan_start(
+    center: int,
+    size: int,
+    total: int,
+    previous_start: int | None,
+) -> int:
+    if size >= total:
+        return 0
+    if previous_start is None:
+        return _crop_start(center, size, total)
+
+    start = max(0, min(previous_start, total - size))
+    margin = max(2, min(8, size // 4))
+    if center < start + margin:
+        start = center - margin
+    elif center >= start + size - margin:
+        start = center - size + margin + 1
+    return max(0, min(start, total - size))
+
+
+def _coerce_int(value: Any) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdecimal():
+        return int(value)
+    return None
 
 
 def _should_force_full_redraw(lines: list[str]) -> bool:

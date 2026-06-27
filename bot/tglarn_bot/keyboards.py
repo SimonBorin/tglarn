@@ -196,7 +196,7 @@ def game_keyboard(response: GameResponse) -> InlineKeyboardMarkup:
         ],
         [
             _game_button("W", "west"),
-            _game_button("Look", "look"),
+            _game_button("Inspect", "look"),
             _game_button("E", "east"),
         ],
         [

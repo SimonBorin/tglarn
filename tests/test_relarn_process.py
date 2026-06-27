@@ -95,7 +95,7 @@ def test_game_keyboard_contains_default_controls() -> None:
     texts = _button_texts(game_keyboard(response))
     callback_data = _button_callback_data(game_keyboard(response))
 
-    assert texts[:9] == ["NW", "N", "NE", "W", "Look", "E", "SW", "S", "SE"]
+    assert texts[:9] == ["NW", "N", "NE", "W", "Inspect", "E", "SW", "S", "SE"]
     assert "Spell" in texts
     assert "Menu" in texts
     assert "Wait" not in texts
@@ -246,6 +246,27 @@ def test_map_rendering_keeps_colored_unrevealed_spaces_blank() -> None:
     assert "." in map_lines[0][24:]
 
 
+def test_map_viewport_does_not_recenter_on_each_step() -> None:
+    lines = [" " * 80 for _ in range(25)]
+    lines[8] = " " * 40 + "@....$" + " " * 34
+    lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
+    lines[18] = "HP: 6 (8) STR=8 INT=14 WIS=12 CON=8 DEX=8 CHA=14 LV: H Gold: 0"
+    screen, _, status = _render_display_lines(lines, "max")
+
+    moved_lines = [" " * 80 for _ in range(25)]
+    moved_lines[8] = " " * 39 + "@.....$" + " " * 34
+    moved_lines[17] = lines[17]
+    moved_lines[18] = lines[18]
+    moved_screen, _, moved_status = _render_display_lines(
+        moved_lines,
+        "max",
+        previous_viewport=status["viewport_origin"],
+    )
+
+    assert status["viewport_origin"]["left"] == moved_status["viewport_origin"]["left"]
+    assert screen.splitlines()[8].index("$") == moved_screen.splitlines()[8].index("$")
+
+
 def test_full_redraw_is_for_regular_map_screens_only() -> None:
     lines = [" " * 80 for _ in range(25)]
     lines[15] = " " * 26 + "@" + " " * 53
@@ -261,6 +282,18 @@ def test_full_redraw_skips_prompted_map_screens() -> None:
     lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
     lines[18] = "HP: 6 (8) STR=8 INT=14 WIS=12"
     lines[19] = "Do you (g) go inside, or (n) do nothing?"
+
+    assert not _should_force_full_redraw(lines)
+
+
+def test_full_redraw_skips_wrapped_chest_prompt() -> None:
+    lines = [" " * 80 for _ in range(25)]
+    lines[15] = " " * 26 + "@" + " " * 53
+    lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
+    lines[18] = "HP: 6 (8) STR=8 INT=14 WIS=12"
+    lines[19] = "There is a chest here."
+    lines[20] = "Do you (g) try to open it, (t) take it, or"
+    lines[21] = "(n) do nothing?"
 
     assert not _should_force_full_redraw(lines)
 
@@ -317,6 +350,27 @@ def test_choice_prompt_ignores_answer_echo() -> None:
     )
 
     assert prompt is None
+
+
+def test_choice_prompt_extracts_chest_options() -> None:
+    prompt = _detect_prompt(
+        [""] * 19
+        + [
+            "There is a chest here.",
+            "Do you (g) try to open it, (t) take it, or",
+            "(n) do nothing?",
+        ]
+    )
+
+    assert prompt == {
+        "question": "Do you (g) try to open it, (t) take it, or (n) do nothing?",
+        "kind": "choice",
+        "options": [
+            {"key": "g", "label": "Try to open it"},
+            {"key": "t", "label": "Take it"},
+            {"key": "n", "label": "Do nothing"},
+        ],
+    }
 
 
 def test_direction_prompt_accepts_movement_commands() -> None:
