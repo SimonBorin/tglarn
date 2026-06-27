@@ -1,0 +1,26 @@
+.git
+.gitignore
+.containerignore
+.env
+.env.*
+!.env.example
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+.idea
+.vscode
+.DS_Store
+run
+data/runtime
+*.log
+
+# Local upstream ReLarn build outputs must not leak into Linux images.
+vendor/relarn/src/relarn.bin
+vendor/relarn/src/deps.mk
+vendor/relarn/src/*.o
+vendor/relarn/src/fov/*.o

@@ -1,0 +1,53 @@
+name: tglarn
+
+services:
+  mongo:
+    image: docker.io/library/mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-tglarn}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-change-me}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-tglarn}
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet
+          --username "$$MONGO_INITDB_ROOT_USERNAME"
+          --password "$$MONGO_INITDB_ROOT_PASSWORD"
+          --authenticationDatabase admin
+          --eval "db.adminCommand('ping').ok" || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  bot:
+    image: localhost/tglarn-bot:dev
+    build:
+      context: ..
+      dockerfile: Containerfile
+    restart: unless-stopped
+    environment:
+      TG_LARN_BOT_TOKEN: ${TG_LARN_BOT_TOKEN:?TG_LARN_BOT_TOKEN is required}
+      MONGO_DATABASE: ${MONGO_DATABASE:-tglarn}
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-tglarn}:${MONGO_INITDB_ROOT_PASSWORD:-change-me}@mongo:27017/${MONGO_DATABASE:-tglarn}?authSource=admin
+      DEFAULT_MAP_VIEW: ${DEFAULT_MAP_VIEW:-wide}
+      GAME_ADAPTER: ${GAME_ADAPTER:-placeholder}
+      RELARN_BINARY_PATH: ${RELARN_BINARY_PATH:-/opt/relarn/lib/relarn/relarn.bin}
+      RELARN_INSTALL_ROOT: ${RELARN_INSTALL_ROOT:-/opt/relarn}
+      RELARN_CYCLE_TIMEOUT_SECONDS: ${RELARN_CYCLE_TIMEOUT_SECONDS:-3}
+      RELARN_CYCLE_SETTLE_SECONDS: ${RELARN_CYCLE_SETTLE_SECONDS:-0.12}
+      REPOSITORY_URL: ${REPOSITORY_URL:-https://github.com/SimonBorin/tglarn}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_STARTUP_ATTEMPTS: ${DATABASE_STARTUP_ATTEMPTS:-30}
+      DATABASE_STARTUP_DELAY_SECONDS: ${DATABASE_STARTUP_DELAY_SECONDS:-2}
+    depends_on:
+      - mongo
+
+volumes:
+  mongo-data:
