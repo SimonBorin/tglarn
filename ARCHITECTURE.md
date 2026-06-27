@@ -4,10 +4,11 @@
 
 Planned stack:
 
-- Language: Python for Telegram bot and adapter code.
-- Upstream game source: C ReLarn source imported under `vendor/relarn/`.
-- Bot API: Telegram Bot API through a Python Telegram library.
-- Persistence: MongoDB-compatible document database for MVP, with a future path to Amazon DocumentDB.
+- Language: Python 3.12+ for Telegram bot and adapter code.
+- Upstream game source: C ReLarn source imported under `vendor/relarn/`; the container image compiles it for the runtime platform.
+- Terminal bridge: `pyte` parses curses/ANSI output from the upstream game pty bridge.
+- Bot API: Telegram Bot API through `aiogram` 3.x.
+- Persistence: MongoDB-compatible document database for MVP, with a future path to Amazon DocumentDB. Python code should use PyMongo async APIs when the storage layer is wired.
 - Runtime: container-first deployment with Podman on a VM for MVP; Kubernetes-compatible structure later.
 - CI/CD: GitLab CI for tests and optional deployment.
 - Documentation: Markdown in repository root.
@@ -19,9 +20,9 @@ The project is intentionally split into layers:
 ```text
 Telegram user
   -> bot/tglarn_bot/      Telegram command and callback handling
-  -> game/                Python adapter and session API
+  -> game/                Python game adapter boundary
   -> vendor/relarn/       Imported original ReLarn source
-  -> persistence          Session state storage
+  -> persistence          Session state and turn storage
 ```
 
 The bot layer should not directly modify imported upstream game internals. It should call a stable adapter API that accepts a player/session id plus a command and returns renderable text and state updates.
@@ -34,11 +35,12 @@ Contains the original upstream ReLarn source imported for reference, porting, an
 
 ### `game/`
 
-Owns the Telegram-friendly game adapter. Expected responsibilities:
+Owns the Telegram-friendly game adapter. There are currently two implementations: `PlaceholderGameAdapter` for deterministic bot/storage testing and `RelarnProcessAdapter` for the experimental upstream C ReLarn bridge. Expected responsibilities:
 
 - session id handling;
 - command normalization;
 - invoking or wrapping game logic;
+- returning `GameResponse` objects containing state, screen text, log entries, and status;
 - converting game output into concise text suitable for Telegram;
 - providing testable functions independent of Telegram.
 
@@ -46,9 +48,11 @@ Owns the Telegram-friendly game adapter. Expected responsibilities:
 
 Owns Telegram-specific behavior:
 
-- `/start` and restart flows;
+- `/start` and `/menu` flows;
 - command handlers;
-- inline keyboards where useful;
+- inline keyboards for menu actions;
+- restart confirmation before progress reset;
+- map view preference controls;
 - formatting messages;
 - error handling for invalid commands;
 - environment configuration.
@@ -97,11 +101,16 @@ More detail is in `docs/DATABASE.md`.
 
 4. Prefer a small adapter boundary before deep porting.
 
-   Reason: the fastest path to a complete challenge project is to expose a playable slice, then iterate.
+   Reason: the fastest path to a complete challenge project is to expose a playable slice, then iterate. The placeholder adapter validates this boundary; the first C ReLarn integration uses a process-backed pty bridge behind the same API without rewriting Telegram handlers.
 
-5. Run everything in containers.
+5. Store upstream game progress in Mongo as native save blobs.
+
+   Reason: the original C game already has a save/restore layer. The bridge adapter writes the current savefile to temporary disk for one action, then stores the resulting savefile as base64 in Mongo session state. This keeps per-user progress database-backed without a long-running process per player.
+
+6. Run everything in containers.
 
    Reason: the project should be deployable on a VM without hand-installed services and should have a clear path to Kubernetes later. The MVP should use Podman Compose with separate bot and MongoDB containers.
+
 
 ## AI Tooling Used
 

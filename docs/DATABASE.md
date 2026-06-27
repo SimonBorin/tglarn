@@ -2,13 +2,13 @@
 
 ## Decision
 
-Use a MongoDB-compatible document database for player, chat, session, and game-state persistence.
+Use a MongoDB-compatible document database for player, session, and game-state persistence. Direct-chat metadata can be added later if it becomes useful, but the current key is Telegram user id.
 
 MVP runtime:
 
 - MongoDB in a neighboring Podman container.
 - Bot connects through a normal MongoDB connection string.
-- The database must be reachable by the bot through `MONGO_URI`; the bot must not assume localhost or a local database file.
+- The database must be reachable by the bot through `MONGO_URI`; the bot must not assume a local database file. In compose, the host is `mongo`; for host-machine development, `.env` uses `localhost`.
 
 Future AWS runtime:
 
@@ -52,7 +52,7 @@ To keep migration from MongoDB to Amazon DocumentDB realistic, the application s
 - no MongoDB-specific features unless checked against DocumentDB support;
 - set `retryWrites=false` in connection strings for DocumentDB compatibility.
 
-## Initial Collections
+## Implemented Collections
 
 ### `players`
 
@@ -63,10 +63,9 @@ One document per Telegram user.
   "_id": 123456789,
   "telegram_user_id": 123456789,
   "username": "example",
-  "first_name": "Example",
-  "last_name": "Player",
+  "display_name": "Example Player",
   "created_at": "2026-06-26T10:00:00Z",
-  "last_seen_at": "2026-06-26T10:30:00Z"
+  "updated_at": "2026-06-26T10:30:00Z"
 }
 ```
 
@@ -86,7 +85,7 @@ One document per direct Telegram chat.
   "telegram_user_id": 123456789,
   "type": "private",
   "created_at": "2026-06-26T10:00:00Z",
-  "last_seen_at": "2026-06-26T10:30:00Z"
+  "updated_at": "2026-06-26T10:30:00Z"
 }
 ```
 
@@ -97,30 +96,29 @@ Indexes:
 
 ### `sessions`
 
-One or more documents per player. Usually one active session.
+One active document per Telegram user for the MVP.
 
 ```json
 {
-  "_id": "session-id",
   "telegram_user_id": 123456789,
-  "chat_id": 123456789,
   "status": "active",
+  "run_number": 1,
+  "map_view": "compact",
   "created_at": "2026-06-26T10:00:00Z",
   "updated_at": "2026-06-26T10:30:00Z",
-  "state_version": 1,
-  "game_state": {},
-  "last_output": "You are standing at the entrance..."
+  "engine_state": {},
+  "last_screen": null,
+  "last_log": []
 }
 ```
 
 Indexes:
 
-- `telegram_user_id + status`
-- `updated_at`
+- unique `telegram_user_id`
 
 ### `turns`
 
-Append-only command history for debugging and retrospective analysis.
+Append-only command history for debugging and retrospective analysis. The collection and index are created now; writes will be added with the game adapter.
 
 ```json
 {
@@ -143,8 +141,8 @@ Indexes:
 Use environment variables:
 
 ```text
-MONGO_URI=mongodb://tglarn_user:password@mongo:27017/tglarn?authSource=admin&retryWrites=false
-MONGO_DB=tglarn
+MONGO_URI=mongodb://tglarn:password@mongo:27017/tglarn?authSource=admin
+MONGO_DATABASE=tglarn
 ```
 
 For local Podman, `mongo` is the service name in `deploy/compose.yml`.
