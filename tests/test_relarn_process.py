@@ -16,6 +16,8 @@ from tglarn_game import GameResponse, PlaceholderGameAdapter
 from tglarn_game.relarn_process import (
     _detect_prompt,
     _is_game_over_display,
+    _next_viewport_origin,
+    _pan_start,
     _prompt_answer_from_command,
     _prompt_requires_enter,
     _render_display_lines,
@@ -265,6 +267,21 @@ def test_map_viewport_does_not_recenter_on_each_step() -> None:
 
     assert status["viewport_origin"]["left"] == moved_status["viewport_origin"]["left"]
     assert screen.splitlines()[8].index("$") == moved_screen.splitlines()[8].index("$")
+
+
+def test_map_viewport_does_not_pan_before_edge_margin() -> None:
+    assert _pan_start(center=14, size=31, total=80, previous_start=10) == 10
+    assert _pan_start(center=37, size=31, total=80, previous_start=10) == 10
+
+
+def test_modal_response_preserves_previous_viewport_origin() -> None:
+    previous = {"left": 10, "top": 0, "level": "H", "map_view": "wide"}
+
+    assert _next_viewport_origin({"screen_type": "modal"}, previous) == previous
+    assert _next_viewport_origin(
+        {"viewport_origin": {"left": 12, "top": 0, "level": "H", "map_view": "wide"}},
+        previous,
+    ) == {"left": 12, "top": 0, "level": "H", "map_view": "wide"}
 
 
 def test_full_redraw_is_for_regular_map_screens_only() -> None:
