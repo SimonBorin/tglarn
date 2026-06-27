@@ -1,4 +1,5 @@
 from tglarn_bot.animations import CREDIT_TEXTS, SPLASH_CAPTIONS, splash_image_path
+from tglarn_bot.handlers import _can_keep_splash_message
 
 
 def test_splash_uses_five_loading_frames() -> None:
@@ -22,3 +23,9 @@ def test_credits_include_bot_and_upstream_authors() -> None:
 def test_splash_image_asset_is_packaged_in_source_tree() -> None:
     assert splash_image_path().name == "larn_01.png"
     assert splash_image_path().exists()
+
+
+def test_intro_splash_can_remain_as_photo_message() -> None:
+    assert _can_keep_splash_message("<b>Before the Caverns</b>", False)
+    assert not _can_keep_splash_message("<pre>map</pre>", False)
+    assert not _can_keep_splash_message("<b>Before the Caverns</b>", True)
