@@ -174,6 +174,19 @@ def repository_keyboard(repository_url: str) -> InlineKeyboardMarkup:
 
 
 def game_keyboard(response: GameResponse) -> InlineKeyboardMarkup:
+    if response.status.get("game_over"):
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.MAIN_MENU)],
+                [
+                    InlineKeyboardButton(
+                        text="Restart Game",
+                        callback_data=CallbackData.RESTART_REQUEST,
+                    )
+                ],
+            ]
+        )
+
     context_actions = [action for action in response.actions if action.group == "context"]
     inline_keyboard = [
         [

@@ -12,8 +12,14 @@ from tglarn_bot.keyboards import (
     rules_menu_keyboard,
     spell_menu_keyboard,
 )
-from tglarn_game import PlaceholderGameAdapter
-from tglarn_game.relarn_process import _detect_prompt, _render_display_lines
+from tglarn_game import GameResponse, PlaceholderGameAdapter
+from tglarn_game.relarn_process import (
+    _detect_prompt,
+    _is_game_over_display,
+    _prompt_answer_from_command,
+    _prompt_requires_enter,
+    _render_display_lines,
+)
 
 
 def _button_texts(markup):
@@ -95,6 +101,18 @@ def test_game_keyboard_contains_default_controls() -> None:
     assert f"{CallbackData.GAME_PREFIX}north" in callback_data
     assert CallbackData.SPELL_MENU in callback_data
     assert CallbackData.GAME_MENU in callback_data
+
+
+def test_game_keyboard_for_game_over_only_offers_menu_actions() -> None:
+    response = GameResponse(
+        state={"adapter": "relarn_process", "game_over": True},
+        screen="Game over.",
+        status={"game_over": True},
+    )
+
+    texts = _button_texts(game_keyboard(response))
+
+    assert texts == ["Main Menu", "Restart Game"]
 
 
 def test_game_keyboard_adds_descend_on_stairs() -> None:
@@ -188,6 +206,23 @@ def test_modal_rendering_keeps_discovery_sections_readable() -> None:
     assert "CTRL" not in screen
 
 
+def test_map_rendering_preserves_native_spaces_for_unrevealed_tiles() -> None:
+    lines = [" " * 80 for _ in range(25)]
+    lines[14] = " " * 25 + "#J#" + " " * 52
+    lines[15] = " " * 26 + "@" + " " * 53
+    lines[16] = " " * 25 + "#X#" + " " * 52
+    lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
+    lines[18] = "HP: 6 (8) STR=8 INT=14 WIS=12"
+
+    screen, _, status = _render_display_lines(lines, "max")
+
+    map_text = screen.split("Spells:", maxsplit=1)[0]
+    assert "#J#" in screen
+    assert "#X#" in screen
+    assert "." not in map_text
+    assert status["screen_type"] == "map"
+
+
 def test_detect_prompt_extracts_spell_picklist_options() -> None:
     prompt = _detect_prompt(
         [
@@ -202,8 +237,38 @@ def test_detect_prompt_extracts_spell_picklist_options() -> None:
 
     assert prompt == {
         "question": "Cast which spell?",
+        "kind": "picklist",
         "options": [
             {"key": "b", "label": "Magic missile"},
             {"key": "e", "label": "Charm monster"},
         ],
     }
+
+
+def test_picklist_prompt_answers_require_enter() -> None:
+    prompt = _detect_prompt(
+        [
+            "Cast which spell?",
+            "a.   protection Generates a +2 protection field",
+            "Up:k/CTRL+p/UP Down:j/CTRL+n/DOWN Select:ENTER",
+        ]
+    )
+
+    assert prompt is not None
+    assert _prompt_requires_enter(prompt)
+    assert _prompt_answer_from_command("prompt:a", prompt) == "a"
+
+
+def test_direction_prompt_accepts_movement_commands() -> None:
+    prompt = _detect_prompt([""] * 19 + ["In what direction? "])
+
+    assert prompt is not None
+    assert prompt["kind"] == "direction"
+    assert _prompt_answer_from_command("north", prompt) == "k"
+    assert _prompt_answer_from_command("prompt:l", prompt) == "l"
+
+
+def test_game_over_detection_matches_relarn_final_screens() -> None:
+    assert _is_game_over_display(["Alas, you have died."])
+    assert _is_game_over_display(["Final Score: 120"])
+    assert not _is_game_over_display(["The jackal hit you"])
