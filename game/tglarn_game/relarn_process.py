@@ -304,6 +304,7 @@ class RelarnProcessAdapter:
                 settle_seconds=self.settle_seconds,
             )
             display_lines = cycle_result.display_lines
+            display_cells = cycle_result.display_cells
             if not save_file.exists() and cycle_result.game_over:
                 save_blob = None
             elif not save_file.exists():
@@ -311,7 +312,7 @@ class RelarnProcessAdapter:
             else:
                 save_blob = save_file.read_bytes()
 
-        screen, log, status = _render_display_lines(display_lines, map_view)
+        screen, log, status = _render_display_lines(display_lines, map_view, display_cells)
         if cycle_result.game_over:
             next_state: dict[str, Any] = {"adapter": "relarn_process", "game_over": True}
             character = _state_character(state)
@@ -377,13 +378,54 @@ class _TerminalCapture:
     def lines(self) -> list[str]:
         return list(self.screen.display)
 
+    def cells(self) -> list[list[_TerminalCell | None]]:
+        rows: list[list[_TerminalCell | None]] = []
+        for y in range(self.screen.lines):
+            buffer_row = self.screen.buffer[y]
+            row: list[_TerminalCell | None] = []
+            for x in range(self.screen.columns):
+                char = buffer_row.get(x)
+                if char is None:
+                    row.append(None)
+                else:
+                    row.append(
+                        _TerminalCell(
+                            data=char.data,
+                            fg=str(char.fg),
+                            bg=str(char.bg),
+                            bold=bool(char.bold),
+                            reverse=bool(char.reverse),
+                        )
+                    )
+            rows.append(row)
+        return rows
+
+    def snapshot(self) -> _TerminalSnapshot:
+        return _TerminalSnapshot(lines=self.lines(), cells=self.cells())
+
     def contains(self, text: str) -> bool:
         return any(text in line for line in self.screen.display)
 
 
 @dataclass(frozen=True, slots=True)
+class _TerminalCell:
+    data: str
+    fg: str
+    bg: str
+    bold: bool
+    reverse: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _TerminalSnapshot:
+    lines: list[str]
+    cells: list[list[_TerminalCell | None]]
+
+
+@dataclass(frozen=True, slots=True)
 class _RelarnCycleResult:
     display_lines: list[str]
+    display_cells: list[list[_TerminalCell | None]] | None = None
     game_over: bool = False
 
 
@@ -411,6 +453,7 @@ def _relarnrc_for_state(state: dict[str, Any] | None) -> str:
         "no-beep\n"
         "no-nap\n"
         "no-show-fov\n"
+        "show-unrevealed\n"
         "dark-screen\n"
     )
 
@@ -494,22 +537,36 @@ def _execute_relarn_cycle(
             _read_for(master_fd, terminal, settle_seconds)
         _read_for(master_fd, terminal, settle_seconds)
 
-        display_lines = terminal.lines()
+        display_snapshot = terminal.snapshot()
+        display_lines = display_snapshot.lines
         if process.poll() is not None:
             _read_once(master_fd, terminal, 0.0)
-            lines = terminal.lines()
-            return _RelarnCycleResult(lines, game_over=_is_game_over_display(lines))
+            snapshot = terminal.snapshot()
+            return _RelarnCycleResult(
+                snapshot.lines,
+                display_cells=snapshot.cells,
+                game_over=_is_game_over_display(snapshot.lines),
+            )
 
         if _is_game_over_display(display_lines):
-            final_lines = _finish_game_over_flow(master_fd, terminal, process, timeout_seconds)
-            return _RelarnCycleResult(final_lines, game_over=True)
+            final_snapshot = _finish_game_over_flow(
+                master_fd,
+                terminal,
+                process,
+                timeout_seconds,
+            )
+            return _RelarnCycleResult(
+                final_snapshot.lines,
+                display_cells=final_snapshot.cells,
+                game_over=True,
+            )
 
         # Leave modal screens if the command opened one, then save and quit.
         os.write(master_fd, _ESCAPE)
         _read_for(master_fd, terminal, 0.03)
         os.write(master_fd, _SAVE_COMMAND)
         _read_process_to_exit(master_fd, terminal, process, timeout_seconds)
-        return _RelarnCycleResult(display_lines)
+        return _RelarnCycleResult(display_lines, display_cells=display_snapshot.cells)
     finally:
         if process.poll() is None:
             process.terminate()
@@ -560,15 +617,15 @@ def _finish_game_over_flow(
     terminal: _TerminalCapture,
     process: subprocess.Popen[bytes],
     timeout_seconds: float,
-) -> list[str]:
+) -> _TerminalSnapshot:
     deadline = time.monotonic() + timeout_seconds
-    last_lines = terminal.lines()
+    last_snapshot = terminal.snapshot()
     while time.monotonic() < deadline:
         if process.poll() is not None:
             _read_once(fd, terminal, 0.0)
-            return terminal.lines()
+            return terminal.snapshot()
 
-        last_lines = terminal.lines()
+        last_snapshot = terminal.snapshot()
         os.write(fd, b"\n")
         _read_for(fd, terminal, 0.12)
 
@@ -580,7 +637,7 @@ def _finish_game_over_flow(
         ):
             _read_once(fd, terminal, 0.05)
 
-    return last_lines
+    return last_snapshot
 
 
 def _read_once(fd: int, terminal: _TerminalCapture, timeout: float) -> None:
@@ -696,6 +753,7 @@ def _command_to_key(command: str) -> bytes | None:
 def _render_display_lines(
     lines: list[str],
     map_view: MapView,
+    cells: list[list[_TerminalCell | None]] | None = None,
 ) -> tuple[str, list[str], dict[str, Any]]:
     width, map_height = _VIEWPORTS[map_view]
     padded = lines + [""] * max(0, _TERMINAL_ROWS - len(lines))
@@ -720,10 +778,10 @@ def _render_display_lines(
     left = _crop_start(player_x, width, _TERMINAL_COLUMNS)
     top = _crop_start(player_y, map_height, _MAP_ROWS)
 
-    cropped_map = [
-        _render_map_line(line[left : left + width])
-        for line in map_lines[top : top + map_height]
-    ]
+    cropped_map: list[str] = []
+    for row_index, line in enumerate(map_lines[top : top + map_height], start=top):
+        row_cells = cells[row_index][left : left + width] if cells is not None else None
+        cropped_map.append(_render_map_line(line[left : left + width], row_cells))
     cropped_stats = _wrap_stats_lines(stats_lines, width)
     screen_lines = cropped_map + cropped_stats
     screen = "\n".join(screen_lines).rstrip()
@@ -815,8 +873,29 @@ def _clean_log_line(line: str) -> str:
     return cleaned
 
 
-def _render_map_line(line: str) -> str:
-    return line
+def _render_map_line(line: str, cells: list[_TerminalCell | None] | None = None) -> str:
+    rendered: list[str] = []
+    for index, char in enumerate(line):
+        if char != " ":
+            rendered.append(char)
+            continue
+        cell = cells[index] if cells is not None and index < len(cells) else None
+        rendered.append(" " if _is_unrevealed_space(cell) else ".")
+    return "".join(rendered)
+
+
+def _is_unrevealed_space(cell: _TerminalCell | None) -> bool:
+    if cell is None:
+        return False
+    return (
+        cell.data == " "
+        and (
+            cell.fg != "default"
+            or cell.bg != "default"
+            or cell.bold
+            or cell.reverse
+        )
+    )
 
 
 def _screen_text(lines: list[str]) -> str:
@@ -899,6 +978,8 @@ def _detect_prompt(lines: list[str]) -> dict[str, Any] | None:
     options = _prompt_options(question)
     if not options:
         return None
+    if _has_echoed_prompt_answer(question, options):
+        return None
     return {"question": question, "kind": _PROMPT_KIND_CHOICE, "options": options}
 
 
@@ -967,6 +1048,14 @@ def _confirm_options(question: str) -> list[dict[str, str]]:
         if all(existing["key"] != key for existing in options):
             options.append({"key": key, "label": _CONFIRM_LABELS.get(key, key.upper())})
     return options
+
+
+def _has_echoed_prompt_answer(question: str, options: list[dict[str, str]]) -> bool:
+    answer = re.search(r"\s+([A-Za-z0-9])\s*$", question)
+    if answer is None:
+        return False
+    allowed = {option["key"] for option in options if option.get("key")}
+    return answer.group(1).lower() in allowed
 
 
 def _prompt_option_label(key: str, phrase: str) -> str:

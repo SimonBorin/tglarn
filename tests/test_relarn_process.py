@@ -19,6 +19,7 @@ from tglarn_game.relarn_process import (
     _prompt_answer_from_command,
     _prompt_requires_enter,
     _render_display_lines,
+    _TerminalCell,
 )
 
 
@@ -44,7 +45,7 @@ def test_intro_keyboard_starts_character_creation() -> None:
     texts = _button_texts(intro_keyboard())
     callback_data = _button_callback_data(intro_keyboard())
 
-    assert texts == ["Create Character", "Main Menu"]
+    assert texts == ["Play Game", "Main Menu"]
     assert CallbackData.CHARACTER_INTRO in callback_data
 
 
@@ -206,7 +207,7 @@ def test_modal_rendering_keeps_discovery_sections_readable() -> None:
     assert "CTRL" not in screen
 
 
-def test_map_rendering_preserves_native_spaces_for_unrevealed_tiles() -> None:
+def test_map_rendering_marks_default_spaces_as_known_floor() -> None:
     lines = [" " * 80 for _ in range(25)]
     lines[14] = " " * 25 + "#J#" + " " * 52
     lines[15] = " " * 26 + "@" + " " * 53
@@ -219,8 +220,29 @@ def test_map_rendering_preserves_native_spaces_for_unrevealed_tiles() -> None:
     map_text = screen.split("Spells:", maxsplit=1)[0]
     assert "#J#" in screen
     assert "#X#" in screen
-    assert "." not in map_text
+    assert "." in map_text
     assert status["screen_type"] == "map"
+
+
+def test_map_rendering_keeps_colored_unrevealed_spaces_blank() -> None:
+    lines = [" " * 80 for _ in range(25)]
+    lines[14] = " " * 25 + "#J#" + " " * 52
+    lines[15] = " " * 26 + "@" + " " * 53
+    lines[16] = " " * 25 + "#X#" + " " * 52
+    lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
+    lines[18] = "HP: 6 (8) STR=8 INT=14 WIS=12"
+    default_cell = _TerminalCell(" ", "default", "default", False, False)
+    unseen_cell = _TerminalCell(" ", "black", "default", False, False)
+    cells = [[default_cell for _ in range(80)] for _ in range(25)]
+    for y in range(17):
+        for x in range(24):
+            cells[y][x] = unseen_cell
+
+    screen, _, _ = _render_display_lines(lines, "max", cells)
+    map_lines = screen.split("Spells:", maxsplit=1)[0].splitlines()
+
+    assert map_lines[0].startswith(" " * 24)
+    assert "." in map_lines[0][24:]
 
 
 def test_detect_prompt_extracts_spell_picklist_options() -> None:
@@ -257,6 +279,18 @@ def test_picklist_prompt_answers_require_enter() -> None:
     assert prompt is not None
     assert _prompt_requires_enter(prompt)
     assert _prompt_answer_from_command("prompt:a", prompt) == "a"
+
+
+def test_choice_prompt_ignores_answer_echo() -> None:
+    prompt = _detect_prompt(
+        [""] * 19
+        + [
+            "You have found the dungeon entrance",
+            "Do you (g) go inside, or (n) do nothing?  g",
+        ]
+    )
+
+    assert prompt is None
 
 
 def test_direction_prompt_accepts_movement_commands() -> None:

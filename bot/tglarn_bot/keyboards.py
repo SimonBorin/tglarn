@@ -67,7 +67,7 @@ def intro_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Create Character",
+                    text="Play Game",
                     callback_data=CallbackData.CHARACTER_INTRO,
                 )
             ],
