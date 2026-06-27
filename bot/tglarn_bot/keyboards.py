@@ -188,6 +188,9 @@ def game_keyboard(response: GameResponse) -> InlineKeyboardMarkup:
         )
 
     context_actions = [action for action in response.actions if action.group == "context"]
+    if response.status.get("screen_type") == "modal":
+        return InlineKeyboardMarkup(inline_keyboard=_modal_action_rows(context_actions))
+
     inline_keyboard = [
         [
             _game_button("NW", "nw"),
@@ -213,6 +216,20 @@ def game_keyboard(response: GameResponse) -> InlineKeyboardMarkup:
         ]
     )
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+
+def _modal_action_rows(actions) -> list[list[InlineKeyboardButton]]:
+    rows = _context_action_rows(actions)
+    rows.extend(
+        [
+            [
+                InlineKeyboardButton(text="Spell", callback_data=CallbackData.SPELL_MENU),
+                InlineKeyboardButton(text="Back to Game", callback_data=CallbackData.BACK_TO_GAME),
+            ],
+            [InlineKeyboardButton(text="Menu", callback_data=CallbackData.GAME_MENU)],
+        ]
+    )
+    return rows
 
 
 def _context_action_rows(actions) -> list[list[InlineKeyboardButton]]:

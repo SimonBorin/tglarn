@@ -439,6 +439,10 @@ async def _play_start_splash(
             )
 
         await asyncio.sleep(SPLASH_DELAY_SECONDS)
+        if _can_keep_splash_message(text, remember_as_game_message):
+            await animation_message.edit_caption(caption=text, reply_markup=reply_markup)
+            return
+
         sent = await animation_message.answer(text, reply_markup=reply_markup)
         await _delete_message(animation_message)
         if remember_as_game_message:
@@ -453,6 +457,10 @@ async def _play_start_splash(
         raise
     except TelegramBadRequest:
         return
+
+
+def _can_keep_splash_message(text: str, remember_as_game_message: bool) -> bool:
+    return not remember_as_game_message and len(text) <= 900 and "<pre>" not in text
 
 
 async def _play_game_over_credits(

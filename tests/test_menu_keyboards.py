@@ -126,6 +126,40 @@ def test_game_keyboard_renders_prompt_options_as_separate_rows() -> None:
     assert f"{CallbackData.GAME_PREFIX}prompt:e" in callback_data
 
 
+def test_game_keyboard_for_modal_prompt_omits_movement_controls() -> None:
+    response = GameResponse(
+        state={},
+        screen="Cast which spell?",
+        status={"screen_type": "modal"},
+        actions=[
+            GameAction(id="prompt_b", label="Magic missile", command="prompt:b"),
+            GameAction(id="prompt_e", label="Charm monster", command="prompt:e"),
+        ],
+    )
+
+    texts = _button_texts(game_keyboard(response))
+    callback_data = _button_callback_data(game_keyboard(response))
+
+    assert "NW" not in texts
+    assert "Magic missile" in texts
+    assert "Charm monster" in texts
+    assert "Back to Game" in texts
+    assert f"{CallbackData.GAME_PREFIX}prompt:b" in callback_data
+    assert CallbackData.BACK_TO_GAME in callback_data
+
+
+def test_game_keyboard_for_modal_list_returns_to_game() -> None:
+    response = GameResponse(
+        state={},
+        screen="Discoveries To Date:\nSpells:\n    magic missile",
+        status={"screen_type": "modal"},
+    )
+
+    texts = _button_texts(game_keyboard(response))
+
+    assert texts == ["Spell", "Back to Game", "Menu"]
+
+
 def test_spell_menu_contains_spell_actions() -> None:
     texts = _button_texts(spell_menu_keyboard())
     callback_data = _button_callback_data(spell_menu_keyboard())
