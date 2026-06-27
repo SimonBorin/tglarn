@@ -22,7 +22,7 @@ Not available yet. Screenshots or short demo captures will be added after the fi
 ## Layout
 
 - `vendor/relarn/` - imported upstream ReLarn source. Keep this close to upstream and avoid bot-specific edits here unless a change must patch the original game.
-- `game/` - game adapter/domain layer. This is where Telegram-friendly APIs should wrap the original game behavior.
+- `game/` - game adapter/domain layer. It currently contains a placeholder adapter with the same boundary the future C ReLarn adapter should implement.
 - `bot/tglarn_bot/` - Telegram bot handlers, keyboards, command routing, and session persistence.
 - `deploy/` - Podman, VM, GitLab CI/CD, and deployment files.
 - `docs/` - architecture notes, porting notes, and licensing notes.
@@ -44,34 +44,88 @@ Imported ReLarn upstream commit:
 
 ## Setup
 
-Current status: project scaffold and imported upstream source are in place. The Telegram bot implementation is not wired yet.
+Current status: project scaffold, imported upstream source, Telegram chat menu, MongoDB-backed session persistence, local container build files, a placeholder game adapter, and an experimental upstream ReLarn process adapter are in place. The default remains the placeholder adapter; set `GAME_ADAPTER=relarn_process` to use the original C game through the pty bridge.
 
 Expected local prerequisites for the implementation phase:
 
-- Podman
+- Python 3.12+ for local bot development
+- Podman for container runtime
 - Telegram bot token from BotFather
 - MongoDB-compatible database; local MVP uses MongoDB in Podman, future deployment may use Amazon DocumentDB
 
 Python and database binaries should not be installed directly on the VM for normal runtime. The bot and supporting services should run in containers.
 
-Create local secrets outside git, for example in `.env`:
+Create local secrets outside git. `.env.example` is committed as a template, while `.env` is ignored by git. The bot token can also be exported from your shell profile as `TG_LARN_BOT_TOKEN`.
 
 ```bash
-BOT_TOKEN=replace-with-telegram-bot-token
-MONGO_URI=mongodb://tglarn_user:replace-with-local-password@mongo:27017/tglarn?authSource=admin&retryWrites=false
+TG_LARN_BOT_TOKEN=replace-with-telegram-bot-token
+MONGO_INITDB_ROOT_USERNAME=tglarn
+MONGO_INITDB_ROOT_PASSWORD=change-me
+MONGO_DATABASE=tglarn
+MONGO_URI=mongodb://tglarn:change-me@localhost:27017/tglarn?authSource=admin
+GAME_ADAPTER=placeholder
 ```
 
 Do not commit real tokens or passwords.
 
 ## Run
 
-The playable bot runtime is not implemented yet. The intended MVP run path is:
+Recommended local container run path:
 
 ```bash
-podman compose -f deploy/compose.yml up -d
+source ~/.zprofile
+./deploy/local-up.sh
 ```
 
-This command will be added and validated when the bot service, persistence service, and deployment files are implemented. See `deploy/README.md` for the container strategy and Kubernetes-readiness notes.
+The script creates `.env` from `.env.example` if needed, builds `localhost/tglarn-bot:dev`, starts MongoDB, and starts the bot. If `podman-compose` is installed it uses `deploy/compose.yml`; otherwise it falls back to direct `podman build/run`, which avoids Docker Desktop compose-provider issues. Stop foreground bot execution with `Ctrl+C`, then stop local containers with:
+
+```bash
+./deploy/local-down.sh
+```
+
+Detached mode:
+
+```bash
+source ~/.zprofile
+./deploy/local-up.sh -d
+podman logs -f tglarn-bot
+```
+
+If your Podman Compose provider is configured correctly, you can also run compose directly:
+
+```bash
+source ~/.zprofile
+set -a; source .env; set +a
+podman compose -f deploy/compose.yml up --build -d
+```
+
+For local Python development against the Mongo container exposed on `127.0.0.1:27017`:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
+source ~/.zprofile
+set -a; source .env; set +a
+.venv/bin/python -m tglarn_bot.main
+```
+
+The bot currently exposes `/start` and `/menu`, plus inline buttons for resuming the game, restarting with confirmation, rules, legend, about, repository link, and display size selection. The Rules menu is split into Controls and Game Mechanics. The active game screen is driven by inline buttons and is edited in place after button presses, so normal button play does not spam new bot messages. Text commands such as `north`, `south`, `east`, `west`, `look`, `status`, and `help` remain available as a fallback; unlike button presses, each typed command sends a new game response message so the latest result stays next to the player's input. Fallback responses are persisted in MongoDB and remembered as the new active game screen for later buttons. Display sizes currently render map viewports as `medium` 21x11, `wide` 31x15, and `max` 52x23. See `deploy/README.md` for the container strategy and Kubernetes-readiness notes.
+
+The experimental `relarn_process` adapter runs the upstream C ReLarn binary under a pseudo-terminal for each action. It stores the native ReLarn savefile as a base64 blob in Mongo session state, so player progress is still database-backed and does not require a long-running game process per user. The container image builds ReLarn into `/opt/relarn`; for local Python runs you must either keep `GAME_ADAPTER=placeholder` or point `RELARN_BINARY_PATH` and `RELARN_INSTALL_ROOT` at a local ReLarn build/install tree.
+
+## Current Placeholder Actions
+
+- `north`, `n`, `up` - move north.
+- `south`, `s`, `down` - move south.
+- `east`, `e`, `right` - move east.
+- `west`, `w`, `left` - move west.
+- `nw`, `ne`, `sw`, `se` - move diagonally.
+- `wait`, `.` - wait one turn.
+- `descend`, `go down`, `>` - go down stairs when standing on stairs.
+- `look`, `l` - inspect the area.
+- `status`, `stats` - show hero stats.
+- `help`, `?` - show help and map legend.
+- `/menu` - open the main menu.
 
 ## Required Challenge Documents
 
