@@ -38,7 +38,7 @@ def test_intro_keyboard_starts_character_creation() -> None:
     texts = _button_texts(intro_keyboard())
     callback_data = _button_callback_data(intro_keyboard())
 
-    assert texts == ["Create Character", "Main Menu"]
+    assert texts == ["Play Game", "Main Menu"]
     assert CallbackData.CHARACTER_INTRO in callback_data
 
 

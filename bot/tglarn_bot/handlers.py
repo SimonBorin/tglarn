@@ -99,7 +99,17 @@ def register_handlers(
             return
         username, display_name = _user_profile(callback.from_user)
         if await session_service.needs_character_setup(telegram_user_id, username, display_name):
-            await _edit_callback_message(callback, INTRO_TEXT, intro_keyboard())
+            animations.start(
+                telegram_user_id,
+                _play_start_splash(
+                    callback=callback,
+                    text=INTRO_TEXT,
+                    reply_markup=intro_keyboard(),
+                    session_service=session_service,
+                    telegram_user_id=telegram_user_id,
+                    remember_as_game_message=False,
+                ),
+            )
             return
         response = await session_service.start_game(
             telegram_user_id,
@@ -157,16 +167,12 @@ def register_handlers(
             character_class=character_class,
         )
         rendered = f"{character_text}\n\n{render_game_response(response)}"
-        animations.start(
-            telegram_user_id,
-            _play_start_splash(
-                callback=callback,
-                text=rendered,
-                reply_markup=game_keyboard(response),
-                session_service=session_service,
-                telegram_user_id=telegram_user_id,
-            ),
+        edited_message = await _edit_callback_message(
+            callback,
+            rendered,
+            game_keyboard(response),
         )
+        await _remember_callback_game_message(callback, session_service, edited_message)
 
     @router.callback_query(F.data == CallbackData.RULES)
     async def rules_callback(callback: CallbackQuery) -> None:
@@ -291,6 +297,18 @@ def register_handlers(
         telegram_user_id = _telegram_user_id(callback)
         if telegram_user_id is not None:
             await session_service.prepare_new_character(telegram_user_id)
+            animations.start(
+                telegram_user_id,
+                _play_start_splash(
+                    callback=callback,
+                    text=INTRO_TEXT,
+                    reply_markup=intro_keyboard(),
+                    session_service=session_service,
+                    telegram_user_id=telegram_user_id,
+                    remember_as_game_message=False,
+                ),
+            )
+            return
         await _edit_callback_message(callback, INTRO_TEXT, intro_keyboard())
 
     @router.callback_query(F.data.startswith(CallbackData.GAME_PREFIX))
@@ -400,6 +418,7 @@ async def _play_start_splash(
     reply_markup,
     session_service: GameSessionService,
     telegram_user_id: int,
+    remember_as_game_message: bool = True,
 ) -> None:
     if callback.message is None:
         return
@@ -422,11 +441,12 @@ async def _play_start_splash(
         await asyncio.sleep(SPLASH_DELAY_SECONDS)
         sent = await animation_message.answer(text, reply_markup=reply_markup)
         await _delete_message(animation_message)
-        await session_service.set_active_game_message(
-            telegram_user_id,
-            sent.chat.id,
-            sent.message_id,
-        )
+        if remember_as_game_message:
+            await session_service.set_active_game_message(
+                telegram_user_id,
+                sent.chat.id,
+                sent.message_id,
+            )
     except asyncio.CancelledError:
         if animation_message is not None:
             await _delete_message(animation_message)
