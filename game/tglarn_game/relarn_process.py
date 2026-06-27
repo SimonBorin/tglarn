@@ -319,11 +319,12 @@ class RelarnProcessAdapter:
             else:
                 save_blob = save_file.read_bytes()
 
+        previous_viewport_origin = _state_viewport_origin(state, map_view)
         screen, log, status = _render_display_lines(
             display_lines,
             map_view,
             display_cells,
-            previous_viewport=_state_viewport_origin(state, map_view),
+            previous_viewport=previous_viewport_origin,
         )
         if cycle_result.game_over:
             next_state: dict[str, Any] = {"adapter": "relarn_process", "game_over": True}
@@ -351,8 +352,8 @@ class RelarnProcessAdapter:
         character = _state_character(state)
         if character is not None:
             next_state["character"] = character
-        viewport_origin = status.get("viewport_origin")
-        if isinstance(viewport_origin, dict):
+        viewport_origin = _next_viewport_origin(status, previous_viewport_origin)
+        if viewport_origin is not None:
             next_state["viewport_origin"] = viewport_origin
         actions: list[GameAction] = []
         if prompt is not None and keys:
@@ -780,6 +781,14 @@ def _state_viewport_origin(
     return viewport
 
 
+def _next_viewport_origin(
+    status: dict[str, Any],
+    previous_viewport: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    viewport = status.get("viewport_origin")
+    return viewport if isinstance(viewport, dict) else previous_viewport
+
+
 def _command_to_key(command: str) -> bytes | None:
     normalized = command.strip().lower()
     return _COMMAND_KEYS.get(normalized)
@@ -894,7 +903,7 @@ def _pan_start(
         return _crop_start(center, size, total)
 
     start = max(0, min(previous_start, total - size))
-    margin = max(2, min(8, size // 4))
+    margin = 2
     if center < start + margin:
         start = center - margin
     elif center >= start + size - margin:
