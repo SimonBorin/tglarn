@@ -46,7 +46,7 @@ players who prefer typing commands directly.
 
 <b>Movement</b>
 <pre>NW / N / NE
- W / Look / E
+ W / Inspect / E
 SW / S / SE</pre>
 
 <b>Combat and Magic</b>
@@ -94,30 +94,37 @@ Core loop:
 Use Legend from the main menu when you need to decode map symbols."""
 
 LEGEND_TEXT = """<b>Legend</b>
-Symbols can overlap. The same glyph may represent terrain, an object, or a
-monster depending on context and color.
+ReLarn reuses letters. In the original terminal UI color helped; in Telegram
+plain text it does not. If a symbol is ambiguous, step on it or use Inspect:
+the log and context buttons tell you what it is.
 
-<b>Player, Terrain, and Places</b>
-<pre>@  you; also Dealer McDope's Pad in town
-space  empty floor, unseen area, or hidden trap
+Examples: D can be a closed door or a dragon. C can be a chest or a centaur.
+
+<b>Map Basics</b>
+<pre>@  you
+.  known floor
+space  unexplored fog or hidden trap
 #  wall
 D  closed door
 O  open door
 %  stairs up/down
 ^  traps or elevators
 &gt;  stairs down
-A  altar
-T/t  throne / dead throne
-F/f  fountain / dead fountain
+X  dungeon exit
+E  dungeon entrance</pre>
+
+<b>Town and Places</b>
+<pre>H  your home
+@  Dealer McDope's Pad
 +  University of Larn
 =  DND store
 $  Bank of Larn
 S  Larn trading post
 L  Larn Revenue Service
-H  your home
-E  dungeon entrance
-X  dungeon exit
 V  volcanic shaft
+A  altar
+T/t  throne / dead throne
+F/f  fountain / dead fountain
 P  pit
 &amp;  statue</pre>
 
@@ -144,6 +151,7 @@ c  fortune cookie
 s  sphere of annihilation</pre>
 
 <b>Monsters</b>
+Uppercase and lowercase are different.
 <pre>0  God of Hellfire
 1-7  demon lord types I-VII
 9  demon prince
