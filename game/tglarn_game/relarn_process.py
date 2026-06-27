@@ -32,6 +32,7 @@ _STATS_START_ROW = 17
 _STATS_END_ROW = 19
 _CONSOLE_START_ROW = 19
 _ESCAPE = b"\x1b"
+_REDRAW_COMMAND = b"\x0c"
 _SAVE_COMMAND = b"S"
 _PROMPT_COMMAND_PREFIX = "prompt:"
 
@@ -561,6 +562,12 @@ def _execute_relarn_cycle(
                 game_over=True,
             )
 
+        if _should_force_full_redraw(display_lines):
+            os.write(master_fd, _REDRAW_COMMAND)
+            _read_for(master_fd, terminal, settle_seconds)
+            display_snapshot = terminal.snapshot()
+            display_lines = display_snapshot.lines
+
         # Leave modal screens if the command opened one, then save and quit.
         os.write(master_fd, _ESCAPE)
         _read_for(master_fd, terminal, 0.03)
@@ -797,6 +804,17 @@ def _render_display_lines(
             "terminal": {"width": _TERMINAL_COLUMNS, "height": _TERMINAL_ROWS},
             "position": {"x": player_x, "y": player_y} if player_x >= 0 else {},
         },
+    )
+
+
+def _should_force_full_redraw(lines: list[str]) -> bool:
+    padded = lines + [""] * max(0, _TERMINAL_ROWS - len(lines))
+    return (
+        _is_map_display(
+            padded[:_MAP_ROWS],
+            padded[_STATS_START_ROW:_STATS_END_ROW],
+        )
+        and _detect_prompt(padded) is None
     )
 
 
