@@ -47,6 +47,30 @@ _PROMPT_START_RE = re.compile(r"(?:^|\s)(?:Do you|Do you want|Would you|Really|A
 _PROMPT_LABEL_STOP_RE = re.compile(r",|\bor\b|\?|\(|\[|$", re.I)
 _PICKLIST_OPTION_RE = re.compile(r"^\s*([A-Za-z])\.\s+(.+?)\s*$")
 _CONFIRM_LABELS = {"y": "Yes", "n": "No"}
+_PROMPT_KIND_CHOICE = "choice"
+_PROMPT_KIND_DIRECTION = "direction"
+_PROMPT_KIND_PICKLIST = "picklist"
+_DIRECTION_PROMPT_OPTIONS = (
+    {"key": "y", "label": "NW"},
+    {"key": "k", "label": "N"},
+    {"key": "u", "label": "NE"},
+    {"key": "h", "label": "W"},
+    {"key": "l", "label": "E"},
+    {"key": "b", "label": "SW"},
+    {"key": "j", "label": "S"},
+    {"key": "n", "label": "SE"},
+)
+_CONTINUE_PROMPT = "Press ENTER, ESCAPE or SPACE to continue:"
+_GAME_OVER_MARKERS = (
+    "Alas, you have died.",
+    "Final Score:",
+    "The End",
+    "GAME OVER",
+)
+_PAGE_EXIT_MARKERS = (
+    "press return or escape to exit",
+    "press y or return for yes",
+)
 _SPELL_NAMES = tuple(
     sorted(
         {
@@ -170,13 +194,18 @@ class RelarnProcessAdapter:
         state: dict[str, Any] | None = None,
         map_view: MapView = "wide",
     ) -> GameResponse:
+        if _state_game_over(state):
+            return _game_over_response(state)
         if _state_save_blob(state) is None:
             return self._run_cycle(state, [], map_view, ["A new run begins."])
         response = self._run_cycle(state, [], map_view, ["Game loaded."])
         pending_prompt = _state_pending_prompt(state)
         if pending_prompt is None:
             return response
-        actions = _prompt_actions(pending_prompt.get("options", []))
+        actions = _prompt_actions(
+            pending_prompt.get("options", []),
+            str(pending_prompt.get("kind", "")),
+        )
         question = str(pending_prompt.get("question", "Choose an option."))
         return GameResponse(
             state=response.state | {"pending_prompt": pending_prompt},
@@ -195,6 +224,8 @@ class RelarnProcessAdapter:
         command: str,
         map_view: MapView = "wide",
     ) -> GameResponse:
+        if _state_game_over(state):
+            return _game_over_response(state)
         normalized = command.strip().lower()
         pending_prompt = _state_pending_prompt(state)
         prompt_answer = _prompt_answer_from_command(normalized, pending_prompt)
@@ -241,6 +272,8 @@ class RelarnProcessAdapter:
         }
         replay_keys = [key.encode("ascii") for key in trigger_keys]
         replay_keys.append(answer.encode("ascii"))
+        if _prompt_requires_enter(pending_prompt):
+            replay_keys.append(b"\n")
         return self._run_cycle(prompt_state, replay_keys, map_view, [])
 
     def _run_cycle(
@@ -261,7 +294,7 @@ class RelarnProcessAdapter:
             home = Path(tmp)
             save_file = _prepare_home(home, state)
             terminal = _TerminalCapture(_TERMINAL_COLUMNS, _TERMINAL_ROWS)
-            display_lines = _execute_relarn_cycle(
+            cycle_result = _execute_relarn_cycle(
                 binary_path=binary_path,
                 install_root=install_root,
                 home=home,
@@ -270,11 +303,31 @@ class RelarnProcessAdapter:
                 timeout_seconds=self.timeout_seconds,
                 settle_seconds=self.settle_seconds,
             )
-            if not save_file.exists():
+            display_lines = cycle_result.display_lines
+            if not save_file.exists() and cycle_result.game_over:
+                save_blob = None
+            elif not save_file.exists():
                 raise RuntimeError("ReLarn did not write a savefile")
-            save_blob = save_file.read_bytes()
+            else:
+                save_blob = save_file.read_bytes()
 
         screen, log, status = _render_display_lines(display_lines, map_view)
+        if cycle_result.game_over:
+            next_state: dict[str, Any] = {"adapter": "relarn_process", "game_over": True}
+            character = _state_character(state)
+            if character is not None:
+                next_state["character"] = character
+            return GameResponse(
+                state=next_state,
+                screen=screen or "Game over.",
+                log=log or ["The run has ended."],
+                status=status | {"adapter": "relarn_process", "game_over": True},
+                actions=[],
+            )
+
+        if save_blob is None:
+            raise RuntimeError("ReLarn did not write a savefile")
+
         prompt = _detect_prompt(display_lines)
         encoded_save = base64.b64encode(save_blob).decode("ascii")
         next_state: dict[str, Any] = {
@@ -293,12 +346,16 @@ class RelarnProcessAdapter:
                 pending_prompt = {
                     "question": prompt["question"],
                     "options": prompt["options"],
+                    "kind": prompt.get("kind", _PROMPT_KIND_CHOICE),
                     "trigger_keys": trigger_keys,
                     "base_save_blob_b64": base_save_b64,
                 }
                 next_state["pending_prompt"] = pending_prompt
                 status["pending_prompt"] = pending_prompt
-                actions = _prompt_actions(prompt["options"])
+                actions = _prompt_actions(
+                    prompt["options"],
+                    str(prompt.get("kind", "")),
+                )
 
         return GameResponse(
             state=next_state,
@@ -322,6 +379,12 @@ class _TerminalCapture:
 
     def contains(self, text: str) -> bool:
         return any(text in line for line in self.screen.display)
+
+
+@dataclass(frozen=True, slots=True)
+class _RelarnCycleResult:
+    display_lines: list[str]
+    game_over: bool = False
 
 
 def _prepare_home(home: Path, state: dict[str, Any] | None) -> Path:
@@ -393,7 +456,7 @@ def _execute_relarn_cycle(
     terminal: _TerminalCapture,
     timeout_seconds: float,
     settle_seconds: float,
-) -> list[str]:
+) -> _RelarnCycleResult:
     master_fd, slave_fd = os.openpty()
     try:
         _set_terminal_size(slave_fd, _TERMINAL_ROWS, _TERMINAL_COLUMNS)
@@ -429,15 +492,24 @@ def _execute_relarn_cycle(
         for key in keys:
             os.write(master_fd, key)
             _read_for(master_fd, terminal, settle_seconds)
+        _read_for(master_fd, terminal, settle_seconds)
 
         display_lines = terminal.lines()
+        if process.poll() is not None:
+            _read_once(master_fd, terminal, 0.0)
+            lines = terminal.lines()
+            return _RelarnCycleResult(lines, game_over=_is_game_over_display(lines))
+
+        if _is_game_over_display(display_lines):
+            final_lines = _finish_game_over_flow(master_fd, terminal, process, timeout_seconds)
+            return _RelarnCycleResult(final_lines, game_over=True)
 
         # Leave modal screens if the command opened one, then save and quit.
         os.write(master_fd, _ESCAPE)
         _read_for(master_fd, terminal, 0.03)
         os.write(master_fd, _SAVE_COMMAND)
         _read_process_to_exit(master_fd, terminal, process, timeout_seconds)
-        return display_lines
+        return _RelarnCycleResult(display_lines)
     finally:
         if process.poll() is None:
             process.terminate()
@@ -483,6 +555,34 @@ def _read_process_to_exit(
     raise TimeoutError("Timed out waiting for ReLarn to exit after save command")
 
 
+def _finish_game_over_flow(
+    fd: int,
+    terminal: _TerminalCapture,
+    process: subprocess.Popen[bytes],
+    timeout_seconds: float,
+) -> list[str]:
+    deadline = time.monotonic() + timeout_seconds
+    last_lines = terminal.lines()
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            _read_once(fd, terminal, 0.0)
+            return terminal.lines()
+
+        last_lines = terminal.lines()
+        os.write(fd, b"\n")
+        _read_for(fd, terminal, 0.12)
+
+        current_lines = terminal.lines()
+        if not (
+            _is_game_over_display(current_lines)
+            or _has_continue_prompt(current_lines)
+            or _has_page_exit_prompt(current_lines)
+        ):
+            _read_once(fd, terminal, 0.05)
+
+    return last_lines
+
+
 def _read_once(fd: int, terminal: _TerminalCapture, timeout: float) -> None:
     readable, _, _ = select.select([fd], [], [], timeout)
     if not readable:
@@ -500,6 +600,20 @@ def _state_pending_prompt(state: dict[str, Any] | None) -> dict[str, Any] | None
         return None
     pending = state.get("pending_prompt")
     return pending if isinstance(pending, dict) else None
+
+
+def _state_game_over(state: dict[str, Any] | None) -> bool:
+    return bool(state and state.get("adapter") == "relarn_process" and state.get("game_over"))
+
+
+def _game_over_response(state: dict[str, Any] | None) -> GameResponse:
+    return GameResponse(
+        state=state or {"adapter": "relarn_process", "game_over": True},
+        screen="Game over.",
+        log=["This run has ended. Restart the game to create a new character."],
+        status={"adapter": "relarn_process", "game_over": True},
+        actions=[],
+    )
 
 
 def _prompt_base_save_b64(state: dict[str, Any] | None) -> str | None:
@@ -543,6 +657,15 @@ def _prompt_answer_from_command(
         return None
     if normalized_command.startswith(_PROMPT_COMMAND_PREFIX):
         answer = normalized_command.removeprefix(_PROMPT_COMMAND_PREFIX).strip().lower()
+    elif pending_prompt.get("kind") == _PROMPT_KIND_DIRECTION:
+        key = _command_to_key(normalized_command)
+        if key is None:
+            answer = normalized_command
+        else:
+            try:
+                answer = key.decode("ascii").lower()
+            except UnicodeDecodeError:
+                return None
     else:
         answer = normalized_command
     if len(answer) != 1:
@@ -550,6 +673,10 @@ def _prompt_answer_from_command(
     options = pending_prompt.get("options", [])
     allowed = {str(option.get("key", "")).lower() for option in options if isinstance(option, dict)}
     return answer if answer in allowed else None
+
+
+def _prompt_requires_enter(pending_prompt: dict[str, Any]) -> bool:
+    return pending_prompt.get("kind") == _PROMPT_KIND_PICKLIST
 
 
 def _state_save_blob(state: dict[str, Any] | None) -> bytes | None:
@@ -689,7 +816,25 @@ def _clean_log_line(line: str) -> str:
 
 
 def _render_map_line(line: str) -> str:
-    return line.replace(" ", ".")
+    return line
+
+
+def _screen_text(lines: list[str]) -> str:
+    return "\n".join(line.rstrip() for line in lines)
+
+
+def _is_game_over_display(lines: list[str]) -> bool:
+    text = _screen_text(lines)
+    return any(marker in text for marker in _GAME_OVER_MARKERS)
+
+
+def _has_continue_prompt(lines: list[str]) -> bool:
+    return _CONTINUE_PROMPT in _screen_text(lines)
+
+
+def _has_page_exit_prompt(lines: list[str]) -> bool:
+    text = _screen_text(lines).lower()
+    return any(marker in text for marker in _PAGE_EXIT_MARKERS)
 
 
 def _wrap_stats_lines(lines: list[str], width: int) -> list[str]:
@@ -741,6 +886,12 @@ def _detect_prompt(lines: list[str]) -> dict[str, Any] | None:
     text = " ".join(line.strip() for line in lines[_CONSOLE_START_ROW:] if line.strip())
     if not text:
         return None
+    if "In what direction?" in text:
+        return {
+            "question": "In what direction?",
+            "kind": _PROMPT_KIND_DIRECTION,
+            "options": list(_DIRECTION_PROMPT_OPTIONS),
+        }
     prompt_start = _PROMPT_START_RE.search(text)
     if prompt_start is None:
         return None
@@ -748,7 +899,7 @@ def _detect_prompt(lines: list[str]) -> dict[str, Any] | None:
     options = _prompt_options(question)
     if not options:
         return None
-    return {"question": question, "options": options}
+    return {"question": question, "kind": _PROMPT_KIND_CHOICE, "options": options}
 
 
 def _detect_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
@@ -759,7 +910,7 @@ def _detect_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
             continue
         options = _picklist_options(nonempty[index + 1 :])
         if options:
-            return {"question": question, "options": options}
+            return {"question": question, "kind": _PROMPT_KIND_PICKLIST, "options": options}
     return None
 
 
@@ -830,7 +981,9 @@ def _prompt_option_label(key: str, phrase: str) -> str:
     return cleaned[:1].upper() + cleaned[1:]
 
 
-def _prompt_actions(options: list[dict[str, str]]) -> list[GameAction]:
+def _prompt_actions(options: list[dict[str, str]], kind: str = "") -> list[GameAction]:
+    if kind == _PROMPT_KIND_DIRECTION:
+        return []
     return [
         GameAction(
             id=f"prompt_{option['key']}",
