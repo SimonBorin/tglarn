@@ -66,6 +66,34 @@ def test_render_game_image_creates_png_from_text_only_response() -> None:
         cleanup_rendered_game_image(rendered)
 
 
+def test_render_game_image_uses_pending_prompt_when_screen_is_blank() -> None:
+    response = GameResponse(
+        state={},
+        screen="",
+        status={
+            "screen_type": "modal",
+            "pending_prompt": {
+                "question": "In what direction?",
+                "kind": "direction",
+                "options": [],
+            },
+        },
+    )
+
+    rendered = render_game_image(response)
+
+    assert rendered is not None
+    try:
+        with Image.open(rendered.path) as image:
+            assert image.size == (
+                _IMAGE_VIEWPORT_WIDTH * _TILE + _PADDING * 2,
+                _IMAGE_VIEWPORT_HEIGHT * _TILE + _PADDING * 2,
+            )
+            assert image.convert("L").getextrema()[0] != image.convert("L").getextrema()[1]
+    finally:
+        cleanup_rendered_game_image(rendered)
+
+
 def test_render_game_image_crops_wide_snapshot_to_narrow_viewport() -> None:
     width = 67
     height = 17

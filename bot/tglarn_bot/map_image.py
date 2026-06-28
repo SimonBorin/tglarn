@@ -17,7 +17,11 @@ _PADDING = 18
 _CAPTION_LIMIT = 1024
 _IMAGE_VIEWPORT_WIDTH = 23
 _IMAGE_VIEWPORT_HEIGHT = 17
-_TEXT_GLYPH_FONT_SIZE = _TILE - 8
+_TEXT_FONT_SIZE = 28
+_TEXT_MIN_FONT_SIZE = 18
+_TEXT_LINE_SPACING = 7
+_TEXT_MARGIN_X = 18
+_TEXT_MARGIN_Y = 18
 _FONT_CANDIDATES = (
     Path(os.environ.get("RELARN_INSTALL_ROOT", "/opt/relarn"))
     / "share/relarn/lib/fonts/Inconsolata-Medium.ttf",
@@ -46,10 +50,15 @@ def render_game_image(
     prefix_html: str | None = None,
 ) -> RenderedGameImage | None:
     snapshot = _map_snapshot(response.status)
-    if snapshot is None and not response.screen.strip():
+    text_screen = _text_screen(response)
+    if snapshot is None and text_screen is None:
         return None
 
-    image = _draw_snapshot(snapshot) if snapshot is not None else _draw_text_screen(response.screen)
+    image = (
+        _draw_snapshot(snapshot)
+        if snapshot is not None
+        else _draw_text_screen(text_screen or "")
+    )
     with tempfile.NamedTemporaryFile(prefix="tglarn-map-", suffix=".png", delete=False) as tmp:
         path = Path(tmp.name)
     image.save(path)
@@ -88,6 +97,22 @@ def _map_snapshot(status: dict[str, Any]) -> dict[str, Any] | None:
     return snapshot
 
 
+def _text_screen(response: GameResponse) -> str | None:
+    if response.screen.strip():
+        return response.screen
+
+    pending_prompt = response.status.get("pending_prompt")
+    if isinstance(pending_prompt, dict):
+        question = str(pending_prompt.get("question", "")).strip()
+        if question:
+            return question
+
+    log_lines = [line.strip() for line in response.log if line.strip()]
+    if log_lines:
+        return "\n".join(log_lines)
+    return None
+
+
 def _draw_snapshot(snapshot: dict[str, Any]) -> Image.Image:
     glyphs: list[str] = snapshot["glyphs"]
     layers: list[str] = snapshot["layers"]
@@ -120,47 +145,82 @@ def _draw_snapshot(snapshot: dict[str, Any]) -> Image.Image:
 
 
 def _draw_text_screen(screen: str) -> Image.Image:
-    lines = _wrap_text_rows(screen.splitlines() or [""], _IMAGE_VIEWPORT_WIDTH)[
-        :_IMAGE_VIEWPORT_HEIGHT
-    ]
     width = _IMAGE_VIEWPORT_WIDTH * _TILE + _PADDING * 2
     height = _IMAGE_VIEWPORT_HEIGHT * _TILE + _PADDING * 2
+    text_left = _PADDING + _TEXT_MARGIN_X
+    text_top = _PADDING + _TEXT_MARGIN_Y
+    text_width = width - (_PADDING + _TEXT_MARGIN_X) * 2
+    text_height = height - (_PADDING + _TEXT_MARGIN_Y) * 2
+    lines, font = _fit_text_lines(screen.splitlines() or [""], text_width, text_height)
+    line_height = _text_line_height(ImageDraw.Draw(Image.new("RGB", (1, 1))), font)
 
     image = Image.new("RGB", (width, height), "#0d1016")
     draw = ImageDraw.Draw(image)
     _draw_text_background(draw)
-    font = _load_font(_TEXT_GLYPH_FONT_SIZE)
-    for y, line in enumerate(lines):
-        for x, glyph in enumerate(line[:_IMAGE_VIEWPORT_WIDTH]):
-            if glyph == " ":
-                continue
-            _draw_glyph(
-                draw,
-                font,
-                glyph,
-                "O" if y == 0 else "P",
-                _PADDING + x * _TILE,
-                _PADDING + y * _TILE,
-                "#f0c04f" if y == 0 else "#d7dee7",
-            )
+    y = text_top
+    for index, line in enumerate(lines):
+        fill = "#f0c04f" if index == 0 else "#d7dee7"
+        shadow = "#05070a"
+        draw.text((text_left + 1, y + 1), line, fill=shadow, font=font)
+        draw.text((text_left, y), line, fill=fill, font=font)
+        y += line_height + _TEXT_LINE_SPACING
     return image
 
 
-def _wrap_text_rows(lines: list[str], width: int) -> list[str]:
+def _fit_text_lines(
+    lines: list[str],
+    max_width: int,
+    max_height: int,
+) -> tuple[list[str], ImageFont.ImageFont]:
+    metrics = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    for size in range(_TEXT_FONT_SIZE, _TEXT_MIN_FONT_SIZE - 1, -2):
+        font = _load_font(size)
+        wrapped = _wrap_text_rows(lines, max_width, metrics, font)
+        line_height = _text_line_height(metrics, font)
+        total_height = len(wrapped) * line_height + max(0, len(wrapped) - 1) * _TEXT_LINE_SPACING
+        if total_height <= max_height:
+            return wrapped, font
+    font = _load_font(_TEXT_MIN_FONT_SIZE)
+    line_height = _text_line_height(metrics, font)
+    max_lines = max(1, (max_height + _TEXT_LINE_SPACING) // (line_height + _TEXT_LINE_SPACING))
+    return _wrap_text_rows(lines, max_width, metrics, font)[:max_lines], font
+
+
+def _wrap_text_rows(
+    lines: list[str],
+    max_width: int,
+    draw: ImageDraw.ImageDraw,
+    font: ImageFont.ImageFont,
+) -> list[str]:
     wrapped: list[str] = []
     for line in lines:
         remaining = line
         if not remaining:
             wrapped.append("")
             continue
-        while len(remaining) > width:
-            split_at = remaining.rfind(" ", 0, width + 1)
+        while _text_width(draw, remaining, font) > max_width:
+            split_at = _pixel_wrap_index(remaining, max_width, draw, font)
             if split_at <= 0:
-                split_at = width
+                split_at = 1
             wrapped.append(remaining[:split_at].rstrip())
             remaining = remaining[split_at:].lstrip()
         wrapped.append(remaining)
     return wrapped
+
+
+def _pixel_wrap_index(
+    text: str,
+    max_width: int,
+    draw: ImageDraw.ImageDraw,
+    font: ImageFont.ImageFont,
+) -> int:
+    best_space = -1
+    for index, char in enumerate(text, start=1):
+        if char == " ":
+            best_space = index
+        if _text_width(draw, text[:index], font) > max_width:
+            return best_space if best_space > 0 else index - 1
+    return len(text)
 
 
 def _draw_text_background(draw: ImageDraw.ImageDraw) -> None:
@@ -174,6 +234,17 @@ def _draw_text_background(draw: ImageDraw.ImageDraw) -> None:
                 fill=palette["bg"],
                 outline=_GRID_COLOR,
             )
+
+
+def _text_line_height(draw: ImageDraw.ImageDraw, font: ImageFont.ImageFont) -> int:
+    bbox = draw.textbbox((0, 0), "Ag", font=font)
+    return bbox[3] - bbox[1]
+
+
+def _text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> int:
+    bbox = draw.textbbox((0, 0), text, font=font)
+    return bbox[2] - bbox[0]
+
 
 def _viewport(snapshot: dict[str, Any]) -> tuple[int, int, int, int]:
     width = int(snapshot["width"])
