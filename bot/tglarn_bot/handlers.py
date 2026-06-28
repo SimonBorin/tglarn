@@ -122,10 +122,11 @@ def register_handlers(
             telegram_user_id,
             _play_start_splash(
                 callback=callback,
-                text=render_game_response(response),
+                text=None,
                 reply_markup=game_keyboard(response),
                 session_service=session_service,
                 telegram_user_id=telegram_user_id,
+                game_response=response,
             ),
         )
 
@@ -410,11 +411,12 @@ class _AnimationManager:
 
 async def _play_start_splash(
     callback: CallbackQuery,
-    text: str,
+    text: str | None,
     reply_markup,
     session_service: GameSessionService,
     telegram_user_id: int,
     remember_as_game_message: bool = True,
+    game_response=None,
 ) -> None:
     if callback.message is None:
         return
@@ -435,6 +437,18 @@ async def _play_start_splash(
             )
 
         await asyncio.sleep(SPLASH_DELAY_SECONDS)
+        if game_response is not None:
+            sent = await _answer_game_response(animation_message, game_response, reply_markup)
+            await _delete_message(animation_message)
+            if remember_as_game_message:
+                await session_service.set_active_game_message(
+                    telegram_user_id,
+                    sent.chat.id,
+                    sent.message_id,
+                )
+            return
+
+        text = text or ""
         if _can_keep_splash_message(text, remember_as_game_message):
             await animation_message.edit_caption(caption=text, reply_markup=reply_markup)
             return
