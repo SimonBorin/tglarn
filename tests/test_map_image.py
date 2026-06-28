@@ -43,10 +43,25 @@ def test_render_game_image_creates_png_from_map_snapshot() -> None:
         cleanup_rendered_game_image(rendered)
 
 
-def test_render_game_image_skips_text_only_response() -> None:
-    response = GameResponse(state={}, screen="Inventory", status={})
+def test_render_game_image_creates_png_from_text_only_response() -> None:
+    response = GameResponse(
+        state={},
+        screen="Cast which spell?\na.   protection\nb.   magic missile",
+        status={"screen_type": "modal"},
+    )
 
-    assert render_game_image(response) is None
+    rendered = render_game_image(response)
+
+    assert rendered is not None
+    try:
+        assert rendered.path.exists()
+        assert "Cast which spell?" not in rendered.caption
+        with Image.open(rendered.path) as image:
+            assert image.size[0] >= 520
+            assert image.size[1] > 80
+            assert image.convert("L").getextrema()[0] != image.convert("L").getextrema()[1]
+    finally:
+        cleanup_rendered_game_image(rendered)
 
 
 def test_render_game_image_crops_wide_snapshot_to_narrow_viewport() -> None:
