@@ -1,4 +1,11 @@
-from tglarn_bot.animations import CREDIT_TEXTS, SPLASH_CAPTIONS, splash_image_path
+from tglarn_bot.animations import (
+    CREDIT_TEXTS,
+    CREDITS_BODY_FONT_SIZE,
+    CREDITS_CACHE_NAMESPACE,
+    SPLASH_CAPTIONS,
+    credits_frame_paths,
+    splash_image_path,
+)
 from tglarn_bot.handlers import _can_keep_splash_message
 
 
@@ -18,6 +25,14 @@ def test_credits_include_bot_and_upstream_authors() -> None:
     assert "Bridgit Spitznagel" in credits
     assert "Chris Reuter" in credits
     assert "Greg McIntyre" in credits
+
+
+def test_credits_use_larger_cached_frames() -> None:
+    paths = credits_frame_paths()
+
+    assert len(paths) == len(CREDIT_TEXTS)
+    assert CREDITS_CACHE_NAMESPACE in str(paths[0].parent)
+    assert CREDITS_BODY_FONT_SIZE >= 40
 
 
 def test_splash_image_asset_is_packaged_in_source_tree() -> None:
