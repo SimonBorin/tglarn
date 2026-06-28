@@ -6,7 +6,7 @@ from collections.abc import Coroutine
 from typing import Any, cast
 
 from aiogram import Dispatcher, F, Router
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message, User
 
@@ -532,7 +532,8 @@ def _cancel_message_animation(message: Message, animations: "_AnimationManager |
 
 
 async def _answer_callback(callback: CallbackQuery) -> None:
-    await callback.answer()
+    with contextlib.suppress(TelegramNetworkError):
+        await callback.answer()
 
 
 async def _edit_callback_message(

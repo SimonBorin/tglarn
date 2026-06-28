@@ -257,20 +257,17 @@ static inline void identify_all() {
     for (int i = 0; i < OBJ_COUNT; i++) { identify(i); }
 }
 
-// Is the player low-level enough for the full lemmings experience?
-//
 // Lemmings are annoying and turn the game into a slog, PLUS it's
 // an abusable way for low-level characters to safely level up.
 //
 // On the other hand, lemmings are part of the game's
 // distinctive feel.
 //
-// So, we keep lemmings and they continue to reproduce like
-// mad but only for the first few levels, enough to convey the
-// experience (and let the player take a little advantage of
-// them) but make it go away before it gets too old.
+// The Telegram wrapper makes every turn explicit and slower than a local
+// terminal session, so the old early-game swarm turns into a UI slog. Keep
+// lemmings in the monster table, but skip the annoying reproduction mode.
 static inline bool annoying_lemmings() {
-    return UU.level <= 4;
+    return false;
 }
 
 

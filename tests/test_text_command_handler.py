@@ -2,7 +2,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from tglarn_bot.handlers import _handle_text_game_command
+from aiogram.exceptions import TelegramNetworkError
+from aiogram.methods import AnswerCallbackQuery
+from tglarn_bot.handlers import _answer_callback, _handle_text_game_command
 from tglarn_bot.texts import INTRO_TEXT
 from tglarn_game import PlaceholderGameAdapter
 
@@ -57,6 +59,19 @@ class FakeSessionService:
         message_id: int,
     ) -> None:
         self.calls.append(("set_active_game_message", telegram_user_id, chat_id, message_id))
+
+
+class NetworkFailingCallback:
+    async def answer(self) -> None:
+        raise TelegramNetworkError(
+            method=AnswerCallbackQuery(callback_query_id="callback-id"),
+            message="ServerDisconnectedError: Server disconnected",
+        )
+
+
+@pytest.mark.asyncio
+async def test_answer_callback_ignores_transient_telegram_network_error() -> None:
+    await _answer_callback(NetworkFailingCallback())
 
 
 @pytest.mark.asyncio
