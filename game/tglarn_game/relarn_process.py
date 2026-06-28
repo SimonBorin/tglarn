@@ -8,6 +8,7 @@ renders the terminal screen back into Telegram-friendly fixed-width text.
 from __future__ import annotations
 
 import base64
+import binascii
 import fcntl
 import os
 import re
@@ -365,6 +366,8 @@ class RelarnProcessAdapter:
             base_save_b64 = _prompt_base_save_b64(state)
             trigger_keys = _keys_to_text(keys)
             if base_save_b64 is not None and trigger_keys:
+                next_state["save_blob_b64"] = base_save_b64
+                next_state["save_size"] = _base64_blob_size(base_save_b64)
                 pending_prompt = {
                     "question": prompt["question"],
                     "options": prompt["options"],
@@ -383,7 +386,7 @@ class RelarnProcessAdapter:
             state=next_state,
             screen=screen,
             log=log or fallback_log,
-            status=status | {"adapter": "relarn_process", "save_size": len(save_blob)},
+            status=status | {"adapter": "relarn_process", "save_size": next_state["save_size"]},
             actions=actions,
         )
 
@@ -871,6 +874,13 @@ def _state_save_blob(state: dict[str, Any] | None) -> bytes | None:
     if not isinstance(encoded, str) or not encoded:
         return None
     return base64.b64decode(encoded)
+
+
+def _base64_blob_size(encoded: str) -> int:
+    try:
+        return len(base64.b64decode(encoded.encode("ascii"), validate=True))
+    except (binascii.Error, UnicodeEncodeError):
+        return 0
 
 
 def _state_viewport_origin(
