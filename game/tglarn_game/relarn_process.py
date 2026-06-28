@@ -54,7 +54,12 @@ _PICKLIST_OPTION_RE = re.compile(r"^\s*([A-Za-z])\.\s+(.+?)\s*$")
 _CONFIRM_LABELS = {"y": "Yes", "n": "No"}
 _PROMPT_KIND_CHOICE = "choice"
 _PROMPT_KIND_DIRECTION = "direction"
+_PROMPT_KIND_INDEXED_PICKLIST = "indexed_picklist"
 _PROMPT_KIND_PICKLIST = "picklist"
+_PICKLIST_COMMAND_PREFIX = "pick:"
+_STORE_PICKLIST_OPTION_RE = re.compile(
+    r"^\*?\s*(?P<label>[A-Za-z][A-Za-z' -]*?)\s+(?P<price>\d+)\s+bucks$"
+)
 _DIRECTION_PROMPT_OPTIONS = (
     {"key": "y", "label": "NW"},
     {"key": "k", "label": "N"},
@@ -282,9 +287,7 @@ class RelarnProcessAdapter:
         if viewport_origin is not None:
             prompt_state["viewport_origin"] = viewport_origin
         replay_keys = [key.encode("ascii") for key in trigger_keys]
-        replay_keys.append(answer.encode("ascii"))
-        if _prompt_requires_enter(pending_prompt):
-            replay_keys.append(b"\n")
+        replay_keys.extend(_prompt_answer_keys(answer, pending_prompt))
         return self._run_cycle(prompt_state, replay_keys, map_view, [])
 
     def _run_cycle(
@@ -843,6 +846,17 @@ def _prompt_answer_from_command(
 ) -> str | None:
     if pending_prompt is None:
         return None
+    if pending_prompt.get("kind") == _PROMPT_KIND_INDEXED_PICKLIST:
+        if not normalized_command.startswith(_PICKLIST_COMMAND_PREFIX):
+            return None
+        answer = normalized_command.removeprefix(_PICKLIST_COMMAND_PREFIX).strip()
+        options = pending_prompt.get("options", [])
+        allowed = {
+            str(option.get("key", ""))
+            for option in options
+            if isinstance(option, dict)
+        }
+        return answer if answer.isdecimal() and answer in allowed else None
     if normalized_command.startswith(_PROMPT_COMMAND_PREFIX):
         answer = normalized_command.removeprefix(_PROMPT_COMMAND_PREFIX).strip().lower()
     elif pending_prompt.get("kind") == _PROMPT_KIND_DIRECTION:
@@ -861,6 +875,17 @@ def _prompt_answer_from_command(
     options = pending_prompt.get("options", [])
     allowed = {str(option.get("key", "")).lower() for option in options if isinstance(option, dict)}
     return answer if answer in allowed else None
+
+
+def _prompt_answer_keys(answer: str, pending_prompt: dict[str, Any]) -> list[bytes]:
+    if pending_prompt.get("kind") == _PROMPT_KIND_INDEXED_PICKLIST:
+        index = int(answer)
+        return [b"j"] * index + [b"\n"]
+
+    keys = [answer.encode("ascii")]
+    if _prompt_requires_enter(pending_prompt):
+        keys.append(b"\n")
+    return keys
 
 
 def _prompt_requires_enter(pending_prompt: dict[str, Any]) -> bool:
@@ -1231,6 +1256,9 @@ def _detect_prompt(lines: list[str]) -> dict[str, Any] | None:
     picklist_prompt = _detect_picklist_prompt(lines)
     if picklist_prompt is not None:
         return picklist_prompt
+    indexed_picklist_prompt = _detect_indexed_picklist_prompt(lines)
+    if indexed_picklist_prompt is not None:
+        return indexed_picklist_prompt
 
     text = " ".join(line.strip() for line in lines[_CONSOLE_START_ROW:] if line.strip())
     if not text:
@@ -1263,6 +1291,37 @@ def _detect_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
         if options:
             return {"question": question, "kind": _PROMPT_KIND_PICKLIST, "options": options}
     return None
+
+
+def _detect_indexed_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
+    nonempty = [
+        line.strip()
+        for line in lines
+        if line.strip() and not _is_modal_ui_hint(line)
+    ]
+    if not any("Dealer McDope's Pad" in line for line in nonempty):
+        return None
+
+    options: list[dict[str, str]] = []
+    for line in nonempty:
+        match = _STORE_PICKLIST_OPTION_RE.match(line)
+        if match is None:
+            continue
+        label = " ".join(match.group("label").split())
+        price = match.group("price")
+        options.append(
+            {
+                "key": str(len(options)),
+                "label": f"{label} ({price} bucks)",
+            }
+        )
+    if not options:
+        return None
+    return {
+        "question": "Choose an item.",
+        "kind": _PROMPT_KIND_INDEXED_PICKLIST,
+        "options": options,
+    }
 
 
 def _picklist_options(lines: list[str]) -> list[dict[str, str]]:
@@ -1346,11 +1405,16 @@ def _prompt_option_label(key: str, phrase: str) -> str:
 def _prompt_actions(options: list[dict[str, str]], kind: str = "") -> list[GameAction]:
     if kind == _PROMPT_KIND_DIRECTION:
         return []
+    command_prefix = (
+        _PICKLIST_COMMAND_PREFIX
+        if kind == _PROMPT_KIND_INDEXED_PICKLIST
+        else _PROMPT_COMMAND_PREFIX
+    )
     return [
         GameAction(
             id=f"prompt_{option['key']}",
             label=option["label"],
-            command=f"{_PROMPT_COMMAND_PREFIX}{option['key']}",
+            command=f"{command_prefix}{option['key']}",
         )
         for option in options
         if option.get("key") and option.get("label")
