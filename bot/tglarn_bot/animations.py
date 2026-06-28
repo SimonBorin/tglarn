@@ -9,10 +9,10 @@ from pathlib import Path
 
 SPLASH_DELAY_SECONDS = 0.5
 CREDITS_DELAY_SECONDS = 1.2
-CREDITS_CACHE_NAMESPACE = "credits-v4"
-CREDITS_TITLE_FONT_SIZE = 112
-CREDITS_BODY_FONT_SIZE = 88
-CREDITS_MIN_BODY_FONT_SIZE = 68
+CREDITS_CACHE_NAMESPACE = "credits-v5"
+CREDITS_TITLE_FONT_SIZE = 74
+CREDITS_BODY_FONT_SIZE = 58
+CREDITS_MIN_BODY_FONT_SIZE = 44
 CREDITS_TEXT_SPACING = 10
 CREDITS_FONT_CANDIDATES = (
     Path(os.environ.get("RELARN_INSTALL_ROOT", "/opt/relarn"))
@@ -87,8 +87,8 @@ def credits_frame_paths() -> list[Path]:
                 min_size=CREDITS_MIN_BODY_FONT_SIZE,
                 max_width=frame.size[0] - 48,
             )
-            _draw_centered_text(draw, frame.size, title, font_title, y=18)
-            _draw_centered_text(draw, frame.size, text, font_body, y=frame.size[1] - 280)
+            _draw_centered_text(draw, frame.size, title, font_title, y=28)
+            _draw_centered_text(draw, frame.size, text, font_body, y=frame.size[1] - 230)
             frame.convert("RGB").save(expected[index])
     return expected
 

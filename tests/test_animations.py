@@ -35,7 +35,7 @@ def test_credits_use_larger_cached_frames() -> None:
 
     assert len(paths) == len(CREDIT_TEXTS)
     assert CREDITS_CACHE_NAMESPACE in str(paths[0].parent)
-    assert CREDITS_BODY_FONT_SIZE >= 80
+    assert 50 <= CREDITS_BODY_FONT_SIZE <= 65
     assert any(path.exists() for path in CREDITS_FONT_CANDIDATES)
 
     with Image.open(paths[0]) as image:
@@ -48,7 +48,7 @@ def test_credits_use_larger_cached_frames() -> None:
 
     text_top = min(y for _, y in bright_text_pixels)
     text_bottom = max(y for _, y in bright_text_pixels)
-    assert text_bottom - text_top > 360
+    assert 380 < text_bottom - text_top < 450
 
 
 def test_splash_image_asset_is_packaged_in_source_tree() -> None:
