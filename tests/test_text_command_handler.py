@@ -4,9 +4,13 @@ from unittest.mock import AsyncMock
 import pytest
 from aiogram.exceptions import TelegramNetworkError
 from aiogram.methods import AnswerCallbackQuery
-from tglarn_bot.handlers import _answer_callback, _handle_text_game_command
+from tglarn_bot.handlers import (
+    _answer_callback,
+    _game_over_credits_caption,
+    _handle_text_game_command,
+)
 from tglarn_bot.texts import INTRO_TEXT
-from tglarn_game import PlaceholderGameAdapter
+from tglarn_game import GameResponse, PlaceholderGameAdapter
 
 
 class FakeMessage:
@@ -110,3 +114,23 @@ async def test_text_command_before_character_creation_shows_intro() -> None:
         ("needs_character_setup", 1001, "kirk", "James Kirk"),
     ]
     message.bot.edit_message_text.assert_not_awaited()
+
+
+def test_game_over_credits_caption_includes_death_log() -> None:
+    response = GameResponse(
+        state={"game_over": True},
+        screen="Game over.",
+        log=[
+            "The chest explodes as you open it.",
+            "You were hit by <monster>.",
+            "Alas, you have died.",
+        ],
+        status={"game_over": True},
+    )
+
+    caption = _game_over_credits_caption(response)
+
+    assert "<b>Log</b>" in caption
+    assert "- The chest explodes as you open it." in caption
+    assert "- You were hit by &lt;monster&gt;." in caption
+    assert "Restart Game" in caption

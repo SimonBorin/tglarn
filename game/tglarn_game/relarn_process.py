@@ -339,7 +339,7 @@ class RelarnProcessAdapter:
             return GameResponse(
                 state=next_state,
                 screen=screen or "Game over.",
-                log=log or ["The run has ended."],
+                log=cycle_result.game_over_log or log or ["The run has ended."],
                 status=status | {"adapter": "relarn_process", "game_over": True},
                 actions=[],
             )
@@ -449,6 +449,7 @@ class _RelarnCycleResult:
     display_cells: list[list[_TerminalCell | None]] | None = None
     map_snapshot: dict[str, Any] | None = None
     game_over: bool = False
+    game_over_log: list[str] | None = None
 
 
 def _prepare_home(home: Path, state: dict[str, Any] | None) -> Path:
@@ -565,13 +566,16 @@ def _execute_relarn_cycle(
         if process.poll() is not None:
             _read_once(master_fd, terminal, 0.0)
             snapshot = terminal.snapshot()
+            game_over = _is_game_over_display(snapshot.lines)
             return _RelarnCycleResult(
                 snapshot.lines,
                 display_cells=snapshot.cells,
-                game_over=_is_game_over_display(snapshot.lines),
+                game_over=game_over,
+                game_over_log=_game_over_log_lines(snapshot.lines) if game_over else None,
             )
 
         if _is_game_over_display(display_lines):
+            game_over_log = _game_over_log_lines(display_lines)
             final_snapshot = _finish_game_over_flow(
                 master_fd,
                 terminal,
@@ -582,6 +586,7 @@ def _execute_relarn_cycle(
                 final_snapshot.lines,
                 display_cells=final_snapshot.cells,
                 game_over=True,
+                game_over_log=game_over_log or _game_over_log_lines(final_snapshot.lines),
             )
 
         if _should_force_full_redraw(display_lines):
@@ -1091,6 +1096,25 @@ def _clean_log_line(line: str) -> str:
     if cleaned.startswith("Welcome to ReLarn") or cleaned.startswith("Welcome back to ReLarn"):
         return ""
     return cleaned
+
+
+def _game_over_log_lines(lines: list[str]) -> list[str]:
+    padded = lines + [""] * max(0, _TERMINAL_ROWS - len(lines))
+    if _is_map_display(
+        padded[:_MAP_ROWS],
+        padded[_STATS_START_ROW:_STATS_END_ROW],
+    ):
+        source = padded[_CONSOLE_START_ROW:]
+    else:
+        source = padded
+
+    result: list[str] = []
+    for line in source:
+        cleaned = _clean_log_line(line)
+        if not cleaned or cleaned == _CONTINUE_PROMPT:
+            continue
+        result.append(cleaned)
+    return result
 
 
 def _render_map_line(line: str, cells: list[_TerminalCell | None] | None = None) -> str:

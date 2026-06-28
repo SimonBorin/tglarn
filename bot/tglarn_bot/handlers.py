@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 from collections.abc import Coroutine
+from html import escape
 from typing import Any, cast
 
 from aiogram import Dispatcher, F, Router
@@ -484,8 +485,10 @@ async def _play_game_over_credits_from_message(
 ) -> None:
     try:
         frames = credits_frame_paths()
+        caption = _game_over_credits_caption(response)
         credits_message = await message.answer_photo(
             FSInputFile(frames[0]),
+            caption=caption,
             reply_markup=game_keyboard(response),
         )
         if delete_source:
@@ -499,13 +502,22 @@ async def _play_game_over_credits_from_message(
         for frame in frames[1:]:
             await asyncio.sleep(CREDITS_DELAY_SECONDS)
             await credits_message.edit_media(
-                InputMediaPhoto(media=FSInputFile(frame)),
+                InputMediaPhoto(media=FSInputFile(frame), caption=caption),
                 reply_markup=game_keyboard(response),
             )
     except asyncio.CancelledError:
         raise
     except TelegramBadRequest:
         return
+
+
+def _game_over_credits_caption(response) -> str:
+    parts = []
+    if response.log:
+        log_text = "\n".join(f"- {escape(item)}" for item in response.log)
+        parts.append(f"<b>Log</b>\n{log_text}")
+    parts.append("<i>Use Restart Game to begin a new run.</i>")
+    return "\n\n".join(parts)
 
 
 async def _delete_message(message: Message) -> None:

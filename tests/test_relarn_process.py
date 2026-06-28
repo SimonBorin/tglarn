@@ -15,6 +15,7 @@ from tglarn_bot.keyboards import (
 from tglarn_game import GameResponse, PlaceholderGameAdapter
 from tglarn_game.relarn_process import (
     _detect_prompt,
+    _game_over_log_lines,
     _is_game_over_display,
     _next_viewport_origin,
     _pan_start,
@@ -480,3 +481,20 @@ def test_game_over_detection_matches_relarn_final_screens() -> None:
     assert _is_game_over_display(["Alas, you have died."])
     assert _is_game_over_display(["Final Score: 120"])
     assert not _is_game_over_display(["The jackal hit you"])
+
+
+def test_game_over_log_preserves_death_context_without_continue_prompt() -> None:
+    lines = [" " * 80 for _ in range(25)]
+    lines[15] = " " * 26 + "@" + " " * 53
+    lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
+    lines[18] = "HP: 0 (8) STR=8 INT=14 WIS=12"
+    lines[19] = "The chest explodes as you open it."
+    lines[20] = "You suffer 5 hit points damage!"
+    lines[21] = "Alas, you have died."
+    lines[22] = "Press ENTER, ESCAPE or SPACE to continue:"
+
+    assert _game_over_log_lines(lines) == [
+        "The chest explodes as you open it.",
+        "You suffer 5 hit points damage!",
+        "Alas, you have died.",
+    ]
