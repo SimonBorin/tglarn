@@ -251,6 +251,7 @@ def _pending_prompt_actions(pending_prompt) -> list[GameAction]:
         return []
     if pending_prompt.get("kind") == "direction":
         return []
+    command_prefix = "pick:" if pending_prompt.get("kind") == "indexed_picklist" else "prompt:"
     options = pending_prompt.get("options")
     if not isinstance(options, list):
         return []
@@ -261,13 +262,13 @@ def _pending_prompt_actions(pending_prompt) -> list[GameAction]:
             continue
         key = str(option.get("key", "")).strip().lower()
         label = str(option.get("label", "")).strip()
-        if len(key) != 1 or not label:
+        if not key or not label:
             continue
         actions.append(
             GameAction(
                 id=f"prompt_{key}",
                 label=label,
-                command=f"prompt:{key}",
+                command=f"{command_prefix}{key}",
             )
         )
     return actions

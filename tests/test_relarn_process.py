@@ -20,6 +20,7 @@ from tglarn_game.relarn_process import (
     _next_viewport_origin,
     _pan_start,
     _prompt_answer_from_command,
+    _prompt_answer_keys,
     _prompt_requires_enter,
     _read_map_snapshot,
     _render_display_lines,
@@ -424,6 +425,32 @@ def test_detect_prompt_extracts_spell_picklist_options() -> None:
     }
 
 
+def test_detect_prompt_extracts_dealer_picklist_options() -> None:
+    prompt = _detect_prompt(
+        [
+            "Hey man, welcome to Dealer McDope's Pad! I gots the some of the finest",
+            "shit you'll find anywhere in Larn -- check it out...",
+            "Looks like you got about 244 bucks on you.",
+            "     Killer Speed                       100 bucks",
+            "     Groovy Acid                        250 bucks",
+            "     Monster Hash                       500 bucks",
+            "Up:k/CTRL+p/UP Down:j/CTRL+n/DOWN Select:ENTER Quit:ESC/CTRL+x",
+            "To select an individual item, type the corresponding",
+            "key; CTRL+v escapes.",
+        ]
+    )
+
+    assert prompt == {
+        "question": "Choose an item.",
+        "kind": "indexed_picklist",
+        "options": [
+            {"key": "0", "label": "Killer Speed (100 bucks)"},
+            {"key": "1", "label": "Groovy Acid (250 bucks)"},
+            {"key": "2", "label": "Monster Hash (500 bucks)"},
+        ],
+    }
+
+
 def test_picklist_prompt_answers_require_enter() -> None:
     prompt = _detect_prompt(
         [
@@ -436,6 +463,23 @@ def test_picklist_prompt_answers_require_enter() -> None:
     assert prompt is not None
     assert _prompt_requires_enter(prompt)
     assert _prompt_answer_from_command("prompt:a", prompt) == "a"
+
+
+def test_indexed_picklist_prompt_answers_move_to_selected_row() -> None:
+    prompt = {
+        "question": "Choose an item.",
+        "kind": "indexed_picklist",
+        "options": [
+            {"key": "0", "label": "Killer Speed (100 bucks)"},
+            {"key": "1", "label": "Groovy Acid (250 bucks)"},
+            {"key": "2", "label": "Monster Hash (500 bucks)"},
+        ],
+    }
+
+    answer = _prompt_answer_from_command("pick:2", prompt)
+
+    assert answer == "2"
+    assert _prompt_answer_keys(answer, prompt) == [b"j", b"j", b"\n"]
 
 
 def test_choice_prompt_ignores_answer_echo() -> None:
