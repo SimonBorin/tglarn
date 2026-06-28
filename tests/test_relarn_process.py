@@ -450,6 +450,19 @@ def test_choice_prompt_ignores_answer_echo() -> None:
     assert prompt is None
 
 
+def test_choice_prompt_ignores_answer_echo_with_followup_log() -> None:
+    prompt = _detect_prompt(
+        [""] * 19
+        + [
+            "You find a brilliant diamond.",
+            "Do you want to (t) take it, or (n) do nothing? t",
+            "take.",
+        ]
+    )
+
+    assert prompt is None
+
+
 def test_choice_prompt_extracts_chest_options() -> None:
     prompt = _detect_prompt(
         [""] * 19
