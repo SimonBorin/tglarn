@@ -349,7 +349,7 @@ def test_full_redraw_skips_modal_screens() -> None:
     assert not _should_force_full_redraw(lines)
 
 
-def test_map_snapshot_capture_is_for_regular_map_screens_only() -> None:
+def test_map_snapshot_capture_includes_prompted_map_screens() -> None:
     lines = [" " * 80 for _ in range(25)]
     lines[15] = " " * 26 + "@" + " " * 53
     lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
@@ -358,7 +358,11 @@ def test_map_snapshot_capture_is_for_regular_map_screens_only() -> None:
     assert _should_capture_map_snapshot(lines)
 
     lines[19] = "Do you (g) go inside, or (n) do nothing?"
-    assert not _should_capture_map_snapshot(lines)
+    assert _should_capture_map_snapshot(lines)
+
+
+def test_map_snapshot_capture_skips_modal_screens() -> None:
+    assert not _should_capture_map_snapshot(["Inventory", "Gold: $0", "a. a spear"])
 
 
 def test_read_map_snapshot_parses_canonical_map_dump(tmp_path) -> None:

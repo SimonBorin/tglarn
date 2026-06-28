@@ -14,6 +14,7 @@
 
 #include <curses.h>
 #include <math.h>
+#include <stdlib.h>
 #include <time.h>
 
 #define ESC '\033'
@@ -21,6 +22,7 @@
 #define CTRL_P 16
 #define CTRL_V 22
 #define CTRL_X 24
+#define TGLARN_MAP_SNAPSHOT_KEY 7
 
 #define CONSOLE_Y (StatsY + StatsHeight)
 #define CONSOLE_H 6
@@ -1175,6 +1177,11 @@ prompt(const char *question) {
     say("%s ", question);
     for (;;) {
         key = cursor_getch();
+
+        if (key == TGLARN_MAP_SNAPSHOT_KEY) {
+            write_tglarn_map_snapshot(getenv("TGLARN_MAP_SNAPSHOT"));
+            continue;
+        }
 
         // Ignore invalid keycodes
         if (key < 0 || key > sizeof(seeking)/sizeof(bool)) continue;
