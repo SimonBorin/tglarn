@@ -1514,10 +1514,15 @@ ochest() {
             say("The chest explodes as you open it.\n");
             headsup();
             i = rnd(10);
-            if (i > UU.hp) i = UU.hp;
-            say("You suffer %d hit point%s damage!\n", (long)i,
-                    i==1?"":"s");
-            losehp(i, DDCHEST);
+            if (i >= UU.hp) i = UU.hp - 1;
+            if (i > 0) {
+                say("You suffer %d hit point%s damage!\n", (long)i,
+                        i==1?"":"s");
+                losehp(i, DDCHEST);
+            }
+            else {
+                say("You are shaken, but survive the blast!\n");
+            }
             switch(rnd(10)) {
             case 1:
                 UU.itching+= rnd(1000)+100;
