@@ -96,6 +96,7 @@ int fillmonst(int what);
 int fullhit(int xx);
 const char *monname_at(int x, int y);
 const char *monname(uint8_t id);
+bool recent_monster_contact_at(int x, int y);
 void hit_mon_melee(int x, int y);
 int hitm(int x, int y, int amt, bool is_melee);
 void hitplayer(int x, int y);

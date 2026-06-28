@@ -597,9 +597,7 @@ def _execute_relarn_cycle(
 
         map_snapshot = None
         if _should_capture_map_snapshot(display_lines):
-            os.write(master_fd, _MAP_SNAPSHOT_COMMAND)
-            _read_for(master_fd, terminal, 0.03)
-            map_snapshot = _read_map_snapshot(_map_snapshot_path(home))
+            map_snapshot = _capture_map_snapshot(master_fd, terminal, home)
 
         # Leave modal screens if the command opened one, then save and quit.
         os.write(master_fd, _ESCAPE)
@@ -698,6 +696,24 @@ def _read_once(fd: int, terminal: _TerminalCapture, timeout: float) -> None:
 
 def _map_snapshot_path(home: Path) -> Path:
     return home / ".relarn" / "tglarn-map.tsv"
+
+
+def _capture_map_snapshot(
+    fd: int,
+    terminal: _TerminalCapture,
+    home: Path,
+) -> dict[str, Any] | None:
+    snapshot_path = _map_snapshot_path(home)
+    snapshot_path.unlink(missing_ok=True)
+    os.write(fd, _MAP_SNAPSHOT_COMMAND)
+
+    deadline = time.monotonic() + 0.35
+    while time.monotonic() < deadline:
+        _read_once(fd, terminal, 0.03)
+        snapshot = _read_map_snapshot(snapshot_path)
+        if snapshot is not None:
+            return snapshot
+    return _read_map_snapshot(snapshot_path)
 
 
 def _should_capture_map_snapshot(lines: list[str]) -> bool:
