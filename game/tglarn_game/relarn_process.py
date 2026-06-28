@@ -1311,11 +1311,14 @@ def _confirm_options(question: str) -> list[dict[str, str]]:
 
 
 def _has_echoed_prompt_answer(question: str, options: list[dict[str, str]]) -> bool:
-    answer = re.search(r"\s+([A-Za-z0-9])\s*$", question)
-    if answer is None:
-        return False
     allowed = {option["key"] for option in options if option.get("key")}
-    return answer.group(1).lower() in allowed
+    answer = re.search(r"\s+([A-Za-z0-9])\s*$", question)
+    if answer is not None and answer.group(1).lower() in allowed:
+        return True
+    for answer in re.finditer(r"(?:\?|\[[A-Za-z0-9]+\])\s+([A-Za-z0-9])(?:\s|$)", question):
+        if answer.group(1).lower() in allowed:
+            return True
+    return False
 
 
 def _prompt_option_label(key: str, phrase: str) -> str:
