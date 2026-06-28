@@ -15,6 +15,8 @@ from tglarn_game import GameResponse
 _TILE = 28
 _PADDING = 18
 _CAPTION_LIMIT = 1024
+_IMAGE_VIEWPORT_WIDTH = 23
+_IMAGE_VIEWPORT_HEIGHT = 17
 _FONT_CANDIDATES = (
     Path(os.environ.get("RELARN_INSTALL_ROOT", "/opt/relarn"))
     / "share/relarn/lib/fonts/Inconsolata-Medium.ttf",
@@ -79,33 +81,55 @@ def _map_snapshot(status: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _draw_snapshot(snapshot: dict[str, Any]) -> Image.Image:
-    width = int(snapshot["width"])
-    height = int(snapshot["height"])
     glyphs: list[str] = snapshot["glyphs"]
     layers: list[str] = snapshot["layers"]
+    viewport_left, viewport_top, viewport_width, viewport_height = _viewport(snapshot)
     image = Image.new(
         "RGB",
-        (width * _TILE + _PADDING * 2, height * _TILE + _PADDING * 2),
+        (viewport_width * _TILE + _PADDING * 2, viewport_height * _TILE + _PADDING * 2),
         "#0d1016",
     )
     draw = ImageDraw.Draw(image)
     font = _load_font(_TILE - 4)
 
-    for y in range(height):
-        for x in range(width):
-            layer = layers[y][x]
-            glyph = glyphs[y][x]
+    for y in range(viewport_height):
+        source_y = viewport_top + y
+        for x in range(viewport_width):
+            source_x = viewport_left + x
+            layer = layers[source_y][source_x]
+            glyph = glyphs[source_y][source_x]
             palette = _LAYER_COLORS.get(layer, _DEFAULT_LAYER)
-            left = _PADDING + x * _TILE
-            top = _PADDING + y * _TILE
+            tile_left = _PADDING + x * _TILE
+            tile_top = _PADDING + y * _TILE
             draw.rectangle(
-                (left, top, left + _TILE - 1, top + _TILE - 1),
+                (tile_left, tile_top, tile_left + _TILE - 1, tile_top + _TILE - 1),
                 fill=palette["bg"],
                 outline=_GRID_COLOR,
             )
-            _draw_glyph(draw, font, glyph, layer, left, top, palette["fg"])
+            _draw_glyph(draw, font, glyph, layer, tile_left, tile_top, palette["fg"])
 
     return image
+
+
+def _viewport(snapshot: dict[str, Any]) -> tuple[int, int, int, int]:
+    width = int(snapshot["width"])
+    height = int(snapshot["height"])
+    viewport_width = min(width, _IMAGE_VIEWPORT_WIDTH)
+    viewport_height = min(height, _IMAGE_VIEWPORT_HEIGHT)
+    player = snapshot.get("player")
+    player_x = player.get("x") if isinstance(player, dict) else None
+    player_y = player.get("y") if isinstance(player, dict) else None
+    center_x = player_x if isinstance(player_x, int) else width // 2
+    center_y = player_y if isinstance(player_y, int) else height // 2
+    left = _crop_start(center_x, viewport_width, width)
+    top = _crop_start(center_y, viewport_height, height)
+    return left, top, viewport_width, viewport_height
+
+
+def _crop_start(center: int, size: int, total: int) -> int:
+    if size >= total:
+        return 0
+    return max(0, min(center - size // 2, total - size))
 
 
 def _draw_glyph(
