@@ -38,6 +38,13 @@ static void eat(int xx, int yy);
 struct World W = {-1};
 
 
+static bool
+near_player(int x, int y) {
+    return x >= UU.x - 1 && x <= UU.x + 1 &&
+           y >= UU.y - 1 && y <= UU.y + 1;
+}
+
+
 /* Return the current level. -1 means the map hasn't been created yet. */
 int
 getlevel() {
@@ -118,6 +125,17 @@ tglarn_snapshot_glyph(int x, int y, char *layer) {
 
     bool in_fov = player_sees(x, y);
     if (UU.monster_detection > 0 && ismon(here.mon)) {
+        *layer = 'M';
+        return monchar(here.mon.id);
+    }
+
+    // Bot snapshots should not hide a creature that can immediately attack.
+    if (
+        UU.blindCount == 0 &&
+        near_player(x, y) &&
+        ismon(here.mon) &&
+        !cantsee(here.mon)
+    ) {
         *layer = 'M';
         return monchar(here.mon.id);
     }
