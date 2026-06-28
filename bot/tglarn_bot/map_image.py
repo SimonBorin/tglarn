@@ -17,6 +17,11 @@ _PADDING = 18
 _CAPTION_LIMIT = 1024
 _IMAGE_VIEWPORT_WIDTH = 23
 _IMAGE_VIEWPORT_HEIGHT = 17
+_TEXT_FONT_SIZE = 28
+_TEXT_LINE_SPACING = 7
+_TEXT_PADDING_X = 24
+_TEXT_PADDING_Y = 22
+_TEXT_MIN_WIDTH = 520
 _FONT_CANDIDATES = (
     Path(os.environ.get("RELARN_INSTALL_ROOT", "/opt/relarn"))
     / "share/relarn/lib/fonts/Inconsolata-Medium.ttf",
@@ -45,14 +50,21 @@ def render_game_image(
     prefix_html: str | None = None,
 ) -> RenderedGameImage | None:
     snapshot = _map_snapshot(response.status)
-    if snapshot is None:
+    if snapshot is None and not response.screen.strip():
         return None
 
-    image = _draw_snapshot(snapshot)
+    image = _draw_snapshot(snapshot) if snapshot is not None else _draw_text_screen(response.screen)
     with tempfile.NamedTemporaryFile(prefix="tglarn-map-", suffix=".png", delete=False) as tmp:
         path = Path(tmp.name)
     image.save(path)
-    return RenderedGameImage(path=path, caption=_render_caption(response, prefix_html))
+    return RenderedGameImage(
+        path=path,
+        caption=_render_caption(
+            response,
+            prefix_html,
+            include_stats=snapshot is not None,
+        ),
+    )
 
 
 def cleanup_rendered_game_image(rendered: RenderedGameImage | None) -> None:
@@ -109,6 +121,46 @@ def _draw_snapshot(snapshot: dict[str, Any]) -> Image.Image:
             _draw_glyph(draw, font, glyph, layer, tile_left, tile_top, palette["fg"])
 
     return image
+
+
+def _draw_text_screen(screen: str) -> Image.Image:
+    lines = screen.splitlines() or [""]
+    font = _load_font(_TEXT_FONT_SIZE)
+    metrics_image = Image.new("RGB", (1, 1))
+    metrics_draw = ImageDraw.Draw(metrics_image)
+    line_height = _text_line_height(metrics_draw, font)
+    content_width = max(
+        (_text_width(metrics_draw, line or " ", font) for line in lines),
+        default=0,
+    )
+    width = max(_TEXT_MIN_WIDTH, content_width + _TEXT_PADDING_X * 2)
+    height = (
+        _TEXT_PADDING_Y * 2
+        + len(lines) * line_height
+        + max(0, len(lines) - 1) * _TEXT_LINE_SPACING
+    )
+    image = Image.new("RGB", (width, height), "#0d1016")
+    draw = ImageDraw.Draw(image)
+    y = _TEXT_PADDING_Y
+    for line in lines:
+        draw.text(
+            (_TEXT_PADDING_X, y),
+            line,
+            fill="#d7dee7",
+            font=font,
+        )
+        y += line_height + _TEXT_LINE_SPACING
+    return image
+
+
+def _text_line_height(draw: ImageDraw.ImageDraw, font: ImageFont.ImageFont) -> int:
+    bbox = draw.textbbox((0, 0), "Ag", font=font)
+    return bbox[3] - bbox[1]
+
+
+def _text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> int:
+    bbox = draw.textbbox((0, 0), text, font=font)
+    return bbox[2] - bbox[0]
 
 
 def _viewport(snapshot: dict[str, Any]) -> tuple[int, int, int, int]:
@@ -169,12 +221,16 @@ def _load_font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default(size=size)
 
 
-def _render_caption(response: GameResponse, prefix_html: str | None) -> str:
+def _render_caption(
+    response: GameResponse,
+    prefix_html: str | None,
+    include_stats: bool = True,
+) -> str:
     parts: list[str] = []
     if prefix_html:
         parts.append(prefix_html)
 
-    stats = _status_lines(response)
+    stats = _status_lines(response) if include_stats else []
     if stats:
         parts.append(f"<pre>{escape(chr(10).join(stats))}</pre>")
 
