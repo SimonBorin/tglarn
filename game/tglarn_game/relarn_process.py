@@ -697,12 +697,9 @@ def _map_snapshot_path(home: Path) -> Path:
 
 def _should_capture_map_snapshot(lines: list[str]) -> bool:
     padded = lines + [""] * max(0, _TERMINAL_ROWS - len(lines))
-    return (
-        _is_map_display(
-            padded[:_MAP_ROWS],
-            padded[_STATS_START_ROW:_STATS_END_ROW],
-        )
-        and _detect_prompt(padded) is None
+    return _is_map_display(
+        padded[:_MAP_ROWS],
+        padded[_STATS_START_ROW:_STATS_END_ROW],
     )
 
 

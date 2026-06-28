@@ -126,6 +126,28 @@ def test_game_keyboard_renders_prompt_options_as_separate_rows() -> None:
     assert f"{CallbackData.GAME_PREFIX}prompt:e" in callback_data
 
 
+def test_game_keyboard_renders_chest_prompt_options() -> None:
+    response = GameResponse(
+        state={},
+        screen="There is a chest here.",
+        actions=[
+            GameAction(id="prompt_g", label="Try to open it", command="prompt:g"),
+            GameAction(id="prompt_t", label="Take it", command="prompt:t"),
+            GameAction(id="prompt_n", label="Do nothing", command="prompt:n"),
+        ],
+    )
+
+    rows = [[button.text for button in row] for row in game_keyboard(response).inline_keyboard]
+    callback_data = _button_callback_data(game_keyboard(response))
+
+    assert ["Try to open it"] in rows
+    assert ["Take it"] in rows
+    assert ["Do nothing"] in rows
+    assert f"{CallbackData.GAME_PREFIX}prompt:g" in callback_data
+    assert f"{CallbackData.GAME_PREFIX}prompt:t" in callback_data
+    assert f"{CallbackData.GAME_PREFIX}prompt:n" in callback_data
+
+
 def test_game_keyboard_for_modal_prompt_omits_movement_controls() -> None:
     response = GameResponse(
         state={},
