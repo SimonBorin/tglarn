@@ -79,7 +79,7 @@ class GameSessionService:
     ) -> GameResponse:
         session = await self.ensure_session(telegram_user_id, username, display_name)
         map_view = self._session_map_view(session)
-        response = self.game_adapter.start(session.get("engine_state"), map_view=map_view)
+        response = self.game_adapter.start(_session_engine_state(session), map_view=map_view)
         await self._save_game_response(telegram_user_id, response, "resume")
         return response
 
@@ -130,7 +130,7 @@ class GameSessionService:
     async def current_game(self, telegram_user_id: int) -> GameResponse:
         session = await self.ensure_session(telegram_user_id)
         map_view = self._session_map_view(session)
-        return self.game_adapter.start(session.get("engine_state"), map_view=map_view)
+        return self.game_adapter.start(_session_engine_state(session), map_view=map_view)
 
     async def restart_session(self, telegram_user_id: int) -> GameResponse:
         session = await self.store.restart_session(
@@ -146,7 +146,7 @@ class GameSessionService:
         session = await self.ensure_session(telegram_user_id)
         map_view = self._session_map_view(session)
         response = self.game_adapter.apply_command(
-            session.get("engine_state"),
+            _session_engine_state(session),
             command,
             map_view=map_view,
         )
@@ -171,7 +171,7 @@ class GameSessionService:
             view=view,
             default_map_view=self.default_map_view,
         )
-        response = self.game_adapter.start(session.get("engine_state"), map_view=view)
+        response = self.game_adapter.start(_session_engine_state(session), map_view=view)
         response = GameResponse(
             state=response.state,
             screen=response.screen,
@@ -215,6 +215,22 @@ def _engine_state_has_started_game(state: Any) -> bool:
     if state.get("adapter") == "placeholder":
         return True
     return isinstance(state.get("save_blob_b64"), str) and bool(state.get("save_blob_b64"))
+
+
+def _session_engine_state(session: dict[str, Any]) -> Any:
+    state = session.get("engine_state")
+    if not isinstance(state, dict) or "pending_prompt" in state:
+        return state
+
+    last_status = session.get("last_status")
+    if not isinstance(last_status, dict):
+        return state
+
+    pending_prompt = last_status.get("pending_prompt")
+    if not isinstance(pending_prompt, dict):
+        return state
+
+    return state | {"pending_prompt": pending_prompt}
 
 
 def _character_state(character_class: str, gender: str) -> dict[str, str]:
