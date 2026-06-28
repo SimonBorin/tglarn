@@ -39,6 +39,7 @@ _MAP_SNAPSHOT_COMMAND = b"\x07"
 _SAVE_COMMAND = b"S"
 _PROMPT_COMMAND_PREFIX = "prompt:"
 _MAP_SNAPSHOT_ENV = "TGLARN_MAP_SNAPSHOT"
+_SAVE_MODAL_EXIT_PASSES = 4
 
 _VIEWPORTS: dict[MapView, tuple[int, int]] = {
     "medium": (21, 11),
@@ -605,9 +606,13 @@ def _execute_relarn_cycle(
         if _should_capture_map_snapshot(display_lines):
             map_snapshot = _capture_map_snapshot(master_fd, terminal, home)
 
-        # Leave modal screens if the command opened one, then save and quit.
-        os.write(master_fd, _ESCAPE)
-        _read_for(master_fd, terminal, 0.03)
+        _close_transient_screens_before_save(
+            master_fd,
+            terminal,
+            process,
+            timeout_seconds,
+            settle_seconds,
+        )
         os.write(master_fd, _SAVE_COMMAND)
         _read_process_to_exit(master_fd, terminal, process, timeout_seconds)
         return _RelarnCycleResult(
@@ -658,6 +663,34 @@ def _read_process_to_exit(
             _read_once(fd, terminal, 0.0)
             return
     raise TimeoutError("Timed out waiting for ReLarn to exit after save command")
+
+
+def _close_transient_screens_before_save(
+    fd: int,
+    terminal: _TerminalCapture,
+    process: subprocess.Popen[bytes],
+    timeout_seconds: float,
+    settle_seconds: float,
+) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    for _ in range(_SAVE_MODAL_EXIT_PASSES):
+        if process.poll() is not None:
+            return
+        exit_key = _modal_exit_key(terminal.lines())
+        if exit_key is None:
+            return
+        os.write(fd, exit_key)
+        _read_for(fd, terminal, min(settle_seconds, max(0.0, deadline - time.monotonic())))
+
+
+def _modal_exit_key(lines: list[str]) -> bytes | None:
+    padded = lines + [""] * max(0, _TERMINAL_ROWS - len(lines))
+    if _is_map_display(
+        padded[:_MAP_ROWS],
+        padded[_STATS_START_ROW:_STATS_END_ROW],
+    ) and _detect_prompt(padded) is None:
+        return None
+    return _ESCAPE
 
 
 def _finish_game_over_flow(
