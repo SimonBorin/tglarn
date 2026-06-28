@@ -30,6 +30,32 @@ class CapturingGameAdapter:
         return self.start(state, map_view)
 
 
+class CapturingApplyAdapter:
+    def __init__(self) -> None:
+        self.applied_state: dict[str, Any] | None = None
+        self.applied_command: str | None = None
+
+    def start(self, state: dict[str, Any] | None = None, map_view: str = "wide") -> GameResponse:
+        return GameResponse(state=state or {}, screen="screen", status={"map_view": map_view})
+
+    def restart(self, map_view: str = "wide") -> GameResponse:
+        return self.start({}, map_view)
+
+    def apply_command(
+        self,
+        state: dict[str, Any] | None,
+        command: str,
+        map_view: str = "wide",
+    ) -> GameResponse:
+        self.applied_state = state
+        self.applied_command = command
+        return GameResponse(
+            state=state or {},
+            screen="answered",
+            status={"map_view": map_view},
+        )
+
+
 class FakeSessionStore:
     def __init__(self) -> None:
         self.session: dict[str, Any] = {"engine_state": {}}
@@ -284,6 +310,38 @@ async def test_service_applies_command_and_persists_state() -> None:
     assert response.state["turn"] == 1
     assert store.session["engine_state"] == response.state
     assert store.calls[-1][1]["input_text"] == "east"
+
+
+@pytest.mark.asyncio
+async def test_service_restores_pending_prompt_from_last_status_for_text_fallback() -> None:
+    pending_prompt = {
+        "question": "Do you (g) quaff it, (t) take it, or (n) do nothing?",
+        "kind": "choice",
+        "options": [
+            {"key": "g", "label": "Quaff it"},
+            {"key": "t", "label": "Take it"},
+            {"key": "n", "label": "Do nothing"},
+        ],
+        "trigger_keys": ["l"],
+        "base_save_blob_b64": "base-save",
+    }
+    store = FakeSessionStore()
+    initial_state = {"adapter": "relarn_process", "save_blob_b64": "after-save"}
+    store.session["engine_state"] = initial_state
+    store.session["last_status"] = {"pending_prompt": pending_prompt}
+    adapter = CapturingApplyAdapter()
+    service = GameSessionService(
+        store=store,
+        game_adapter=adapter,
+        default_map_view="wide",
+    )
+
+    await service.apply_command(1001, "t")
+
+    assert adapter.applied_command == "t"
+    assert adapter.applied_state == initial_state | {
+        "pending_prompt": pending_prompt,
+    }
 
 
 @pytest.mark.asyncio

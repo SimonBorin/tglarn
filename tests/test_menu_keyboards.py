@@ -148,6 +148,36 @@ def test_game_keyboard_renders_chest_prompt_options() -> None:
     assert f"{CallbackData.GAME_PREFIX}prompt:n" in callback_data
 
 
+def test_game_keyboard_renders_status_only_potion_prompt_options() -> None:
+    response = GameResponse(
+        state={},
+        screen="You find a magic potion.",
+        log=[
+            "You find a magic potion.",
+            "Do you (g) quaff it, (t) take it, or (n) do nothing?",
+        ],
+        status={
+            "pending_prompt": {
+                "question": "Do you (g) quaff it, (t) take it, or (n) do nothing?",
+                "kind": "choice",
+                "options": [
+                    {"key": "g", "label": "Quaff it"},
+                    {"key": "t", "label": "Take it"},
+                    {"key": "n", "label": "Do nothing"},
+                ],
+            },
+        },
+    )
+
+    texts = _button_texts(game_keyboard(response))
+    callback_data = _button_callback_data(game_keyboard(response))
+
+    assert "Quaff it" in texts
+    assert "Take it" in texts
+    assert "Do nothing" in texts
+    assert f"{CallbackData.GAME_PREFIX}prompt:t" in callback_data
+
+
 def test_game_keyboard_for_modal_prompt_omits_movement_controls() -> None:
     response = GameResponse(
         state={},

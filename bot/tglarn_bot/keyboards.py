@@ -1,7 +1,7 @@
 """Inline keyboards for the Telegram chat UI."""
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from tglarn_game import GameResponse
+from tglarn_game import GameAction, GameResponse
 
 CHARACTER_CLASSES = (
     ("Ogre", "ogre"),
@@ -188,6 +188,8 @@ def game_keyboard(response: GameResponse) -> InlineKeyboardMarkup:
         )
 
     context_actions = [action for action in response.actions if action.group == "context"]
+    if not context_actions:
+        context_actions = _pending_prompt_actions(response.status.get("pending_prompt"))
     if response.status.get("screen_type") == "modal":
         return InlineKeyboardMarkup(inline_keyboard=_modal_action_rows(context_actions))
 
@@ -242,6 +244,33 @@ def _context_action_rows(actions) -> list[list[InlineKeyboardButton]]:
         ]
         for action in actions
     ]
+
+
+def _pending_prompt_actions(pending_prompt) -> list[GameAction]:
+    if not isinstance(pending_prompt, dict):
+        return []
+    if pending_prompt.get("kind") == "direction":
+        return []
+    options = pending_prompt.get("options")
+    if not isinstance(options, list):
+        return []
+
+    actions: list[GameAction] = []
+    for option in options:
+        if not isinstance(option, dict):
+            continue
+        key = str(option.get("key", "")).strip().lower()
+        label = str(option.get("label", "")).strip()
+        if len(key) != 1 or not label:
+            continue
+        actions.append(
+            GameAction(
+                id=f"prompt_{key}",
+                label=label,
+                command=f"prompt:{key}",
+            )
+        )
+    return actions
 
 
 def spell_menu_keyboard() -> InlineKeyboardMarkup:
