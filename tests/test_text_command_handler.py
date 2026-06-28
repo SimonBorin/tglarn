@@ -20,9 +20,14 @@ class FakeMessage:
         self.text = text
         self.bot = SimpleNamespace(edit_message_text=AsyncMock())
         self.answers = []
+        self.photos = []
 
     async def answer(self, text, reply_markup=None):
         self.answers.append((text, reply_markup))
+        return SimpleNamespace(chat=SimpleNamespace(id=2002), message_id=3003)
+
+    async def answer_photo(self, photo, caption=None, reply_markup=None):
+        self.photos.append((photo, caption, reply_markup))
         return SimpleNamespace(chat=SimpleNamespace(id=2002), message_id=3003)
 
 
@@ -75,19 +80,20 @@ async def test_answer_callback_ignores_transient_telegram_network_error() -> Non
 
 
 @pytest.mark.asyncio
-async def test_text_command_sends_new_game_message_instead_of_editing_active_message() -> None:
+async def test_text_command_sends_new_game_photo_instead_of_editing_active_message() -> None:
     message = FakeMessage("east")
     service = FakeSessionService()
 
     await _handle_text_game_command(message, service)
 
-    assert len(message.answers) == 1
-    assert "@" in message.answers[0][0]
+    assert len(message.photos) == 1
+    assert "Use /menu" in message.photos[0][1]
     assert service.calls == [
         ("needs_character_setup", 1001, "kirk", "James Kirk"),
         ("apply_command", 1001, "east"),
         ("set_active_game_message", 1001, 2002, 3003),
     ]
+    assert message.answers == []
     message.bot.edit_message_text.assert_not_awaited()
 
 
