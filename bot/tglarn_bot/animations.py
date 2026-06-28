@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 from importlib.resources import files
 from pathlib import Path
 
 SPLASH_DELAY_SECONDS = 0.5
 CREDITS_DELAY_SECONDS = 1.2
-CREDITS_CACHE_NAMESPACE = "credits-v3"
-CREDITS_TITLE_FONT_SIZE = 84
-CREDITS_BODY_FONT_SIZE = 68
-CREDITS_MIN_BODY_FONT_SIZE = 48
+CREDITS_CACHE_NAMESPACE = "credits-v4"
+CREDITS_TITLE_FONT_SIZE = 112
+CREDITS_BODY_FONT_SIZE = 88
+CREDITS_MIN_BODY_FONT_SIZE = 68
+CREDITS_TEXT_SPACING = 10
+CREDITS_FONT_CANDIDATES = (
+    Path(os.environ.get("RELARN_INSTALL_ROOT", "/opt/relarn"))
+    / "share/relarn/lib/fonts/Inconsolata-Medium.ttf",
+    Path("vendor/relarn/data/fonts/Inconsolata-Medium.ttf"),
+)
 
 SPLASH_CAPTIONS = (
     "Loading LARN [#----]",
@@ -29,7 +36,7 @@ CREDIT_TEXTS = (
     "iLarn\nBridgit Spitznagel\ni0lanthe",
     "ReLarn\nChris Reuter",
     "libfov\nGreg McIntyre",
-    "Inconsolata Font\nRaph Levien and collaborators",
+    "Inconsolata Font\nRaph Levien\nand collaborators",
     "Thanks for playing",
 )
 
@@ -68,7 +75,7 @@ def credits_frame_paths() -> list[Path]:
         font_title = _load_font(ImageFont, CREDITS_TITLE_FONT_SIZE)
         for index, text in enumerate(CREDIT_TEXTS):
             frame = base.copy()
-            overlay = Image.new("RGBA", frame.size, (0, 0, 0, 105))
+            overlay = Image.new("RGBA", frame.size, (0, 0, 0, 150))
             frame.alpha_composite(overlay)
 
             draw = ImageDraw.Draw(frame)
@@ -81,7 +88,7 @@ def credits_frame_paths() -> list[Path]:
                 max_width=frame.size[0] - 48,
             )
             _draw_centered_text(draw, frame.size, title, font_title, y=18)
-            _draw_centered_text(draw, frame.size, text, font_body, y=frame.size[1] - 276)
+            _draw_centered_text(draw, frame.size, text, font_body, y=frame.size[1] - 280)
             frame.convert("RGB").save(expected[index])
     return expected
 
@@ -106,12 +113,18 @@ def _cache_dir(name: str) -> Path:
 
 
 def _load_font(image_font_module, size: int):
+    for path in CREDITS_FONT_CANDIDATES:
+        if path.exists():
+            return image_font_module.truetype(str(path), size)
     for font_name in ("DejaVuSans-Bold.ttf", "Arial.ttf"):
         try:
             return image_font_module.truetype(font_name, size)
         except OSError:
             continue
-    return image_font_module.load_default()
+    try:
+        return image_font_module.load_default(size=size)
+    except TypeError:
+        return image_font_module.load_default()
 
 
 def _load_fitted_font(
@@ -126,7 +139,13 @@ def _load_fitted_font(
     metrics = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     for size in range(max_size, min_size - 1, -2):
         font = _load_font(image_font_module, size)
-        bbox = metrics.multiline_textbbox((0, 0), text, font=font, spacing=8, align="center")
+        bbox = metrics.multiline_textbbox(
+            (0, 0),
+            text,
+            font=font,
+            spacing=CREDITS_TEXT_SPACING,
+            align="center",
+        )
         if bbox[2] - bbox[0] <= max_width:
             return font
     return _load_font(image_font_module, min_size)
@@ -134,7 +153,13 @@ def _load_fitted_font(
 
 def _draw_centered_text(draw, image_size: tuple[int, int], text, font, y: int) -> None:
     x = image_size[0] // 2
-    bbox = draw.multiline_textbbox((0, 0), text, font=font, spacing=8, align="center")
+    bbox = draw.multiline_textbbox(
+        (0, 0),
+        text,
+        font=font,
+        spacing=CREDITS_TEXT_SPACING,
+        align="center",
+    )
     width = bbox[2] - bbox[0]
     position = (x - width // 2, y)
     shadow_position = (position[0] + 2, position[1] + 2)
@@ -143,7 +168,7 @@ def _draw_centered_text(draw, image_size: tuple[int, int], text, font, y: int) -
         text,
         font=font,
         fill=(0, 0, 0, 210),
-        spacing=8,
+        spacing=CREDITS_TEXT_SPACING,
         align="center",
     )
     draw.multiline_text(
@@ -151,6 +176,6 @@ def _draw_centered_text(draw, image_size: tuple[int, int], text, font, y: int) -
         text,
         font=font,
         fill=(255, 232, 204, 255),
-        spacing=8,
+        spacing=CREDITS_TEXT_SPACING,
         align="center",
     )
