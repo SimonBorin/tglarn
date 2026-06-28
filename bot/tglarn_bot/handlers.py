@@ -37,6 +37,7 @@ from .keyboards import (
     rules_menu_keyboard,
     spell_menu_keyboard,
 )
+from .map_image import cleanup_rendered_game_image, render_game_image
 from .rendering import render_game_response
 from .services import GameSessionService
 from .texts import (
@@ -166,11 +167,11 @@ def register_handlers(
             gender=gender_label,
             character_class=character_class,
         )
-        rendered = f"{character_text}\n\n{render_game_response(response)}"
-        edited_message = await _edit_callback_message(
+        edited_message = await _edit_callback_game_response(
             callback,
-            rendered,
+            response,
             game_keyboard(response),
+            prefix_html=character_text,
         )
         await _remember_callback_game_message(callback, session_service, edited_message)
 
@@ -224,14 +225,11 @@ def register_handlers(
         if telegram_user_id is None:
             return
         response = await session_service.set_map_view(telegram_user_id, view)
-        rendered = (
-            f"{MAP_VIEW_UPDATED_TEXT.format(view=_map_view_label(view))}\n\n"
-            f"{render_game_response(response)}"
-        )
-        edited_message = await _edit_callback_message(
+        edited_message = await _edit_callback_game_response(
             callback,
-            rendered,
+            response,
             game_keyboard(response),
+            prefix_html=MAP_VIEW_UPDATED_TEXT.format(view=_map_view_label(view)),
         )
         await _remember_callback_game_message(callback, session_service, edited_message)
 
@@ -268,9 +266,9 @@ def register_handlers(
         if telegram_user_id is None:
             return
         response = await session_service.current_game(telegram_user_id)
-        edited_message = await _edit_callback_message(
+        edited_message = await _edit_callback_game_response(
             callback,
-            render_game_response(response),
+            response,
             game_keyboard(response),
         )
         await _remember_callback_game_message(callback, session_service, edited_message)
@@ -330,9 +328,9 @@ def register_handlers(
                 ),
             )
             return
-        edited_message = await _edit_callback_message(
+        edited_message = await _edit_callback_game_response(
             callback,
-            render_game_response(response),
+            response,
             game_keyboard(response),
         )
         await _remember_callback_game_message(callback, session_service, edited_message)
@@ -380,10 +378,7 @@ async def _handle_text_game_command(
         )
         return
 
-    sent = await message.answer(
-        render_game_response(response),
-        reply_markup=game_keyboard(response),
-    )
+    sent = await _answer_game_response(message, response, game_keyboard(response))
     await session_service.set_active_game_message(
         message.from_user.id,
         sent.chat.id,
@@ -536,6 +531,76 @@ async def _answer_callback(callback: CallbackQuery) -> None:
         await callback.answer()
 
 
+async def _answer_game_response(
+    message: Message,
+    response,
+    reply_markup,
+    prefix_html: str | None = None,
+) -> Message:
+    rendered_image = render_game_image(response, prefix_html=prefix_html)
+    if rendered_image is None:
+        text = _render_game_text(response, prefix_html)
+        return await message.answer(text, reply_markup=reply_markup)
+    try:
+        return await message.answer_photo(
+            FSInputFile(rendered_image.path),
+            caption=rendered_image.caption,
+            reply_markup=reply_markup,
+        )
+    finally:
+        cleanup_rendered_game_image(rendered_image)
+
+
+async def _edit_callback_game_response(
+    callback: CallbackQuery,
+    response,
+    reply_markup,
+    prefix_html: str | None = None,
+) -> Message | None:
+    rendered_image = render_game_image(response, prefix_html=prefix_html)
+    if rendered_image is None:
+        return await _edit_callback_message(
+            callback,
+            _render_game_text(response, prefix_html),
+            reply_markup,
+        )
+    if callback.message is None:
+        cleanup_rendered_game_image(rendered_image)
+        return None
+    try:
+        if callback.message.photo:
+            try:
+                await callback.message.edit_media(
+                    InputMediaPhoto(
+                        media=FSInputFile(rendered_image.path),
+                        caption=rendered_image.caption,
+                    ),
+                    reply_markup=reply_markup,
+                )
+                return callback.message
+            except TelegramBadRequest as exc:
+                if "message is not modified" in str(exc).lower():
+                    return callback.message
+                raise
+
+        sent = await callback.message.answer_photo(
+            FSInputFile(rendered_image.path),
+            caption=rendered_image.caption,
+            reply_markup=reply_markup,
+        )
+        await _delete_message(callback.message)
+        return sent
+    finally:
+        cleanup_rendered_game_image(rendered_image)
+
+
+def _render_game_text(response, prefix_html: str | None = None) -> str:
+    rendered = render_game_response(response)
+    if not prefix_html:
+        return rendered
+    return f"{prefix_html}\n\n{rendered}"
+
+
 async def _edit_callback_message(
     callback: CallbackQuery,
     text: str,
@@ -562,14 +627,6 @@ async def _edit_photo_callback_message(
 ) -> Message | None:
     if callback.message is None:
         return None
-    if len(text) <= 900 and "<pre>" not in text:
-        try:
-            await callback.message.edit_caption(caption=text, reply_markup=reply_markup)
-            return callback.message
-        except TelegramBadRequest as exc:
-            if "message is not modified" in str(exc).lower():
-                return callback.message
-            raise
 
     sent = await callback.message.answer(text, reply_markup=reply_markup)
     await _delete_message(callback.message)

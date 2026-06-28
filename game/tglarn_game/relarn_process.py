@@ -34,8 +34,10 @@ _STATS_END_ROW = 19
 _CONSOLE_START_ROW = 19
 _ESCAPE = b"\x1b"
 _REDRAW_COMMAND = b"\x0c"
+_MAP_SNAPSHOT_COMMAND = b"\x07"
 _SAVE_COMMAND = b"S"
 _PROMPT_COMMAND_PREFIX = "prompt:"
+_MAP_SNAPSHOT_ENV = "TGLARN_MAP_SNAPSHOT"
 
 _VIEWPORTS: dict[MapView, tuple[int, int]] = {
     "medium": (21, 11),
@@ -327,6 +329,8 @@ class RelarnProcessAdapter:
             display_cells,
             previous_viewport=previous_viewport_origin,
         )
+        if cycle_result.map_snapshot is not None:
+            status["map_snapshot"] = cycle_result.map_snapshot
         if cycle_result.game_over:
             next_state: dict[str, Any] = {"adapter": "relarn_process", "game_over": True}
             character = _state_character(state)
@@ -443,6 +447,7 @@ class _TerminalSnapshot:
 class _RelarnCycleResult:
     display_lines: list[str]
     display_cells: list[list[_TerminalCell | None]] | None = None
+    map_snapshot: dict[str, Any] | None = None
     game_over: bool = False
 
 
@@ -527,6 +532,7 @@ def _execute_relarn_cycle(
                 "USER": "tglarn",
                 "RELARN_INSTALL_ROOT": str(install_root),
                 "TERM": "xterm-256color",
+                _MAP_SNAPSHOT_ENV: str(_map_snapshot_path(home)),
             }
         )
         process = subprocess.Popen(
@@ -584,12 +590,22 @@ def _execute_relarn_cycle(
             display_snapshot = terminal.snapshot()
             display_lines = display_snapshot.lines
 
+        map_snapshot = None
+        if _should_capture_map_snapshot(display_lines):
+            os.write(master_fd, _MAP_SNAPSHOT_COMMAND)
+            _read_for(master_fd, terminal, 0.03)
+            map_snapshot = _read_map_snapshot(_map_snapshot_path(home))
+
         # Leave modal screens if the command opened one, then save and quit.
         os.write(master_fd, _ESCAPE)
         _read_for(master_fd, terminal, 0.03)
         os.write(master_fd, _SAVE_COMMAND)
         _read_process_to_exit(master_fd, terminal, process, timeout_seconds)
-        return _RelarnCycleResult(display_lines, display_cells=display_snapshot.cells)
+        return _RelarnCycleResult(
+            display_lines,
+            display_cells=display_snapshot.cells,
+            map_snapshot=map_snapshot,
+        )
     finally:
         if process.poll() is None:
             process.terminate()
@@ -673,6 +689,77 @@ def _read_once(fd: int, terminal: _TerminalCapture, timeout: float) -> None:
         return
     if data:
         terminal.feed(data)
+
+
+def _map_snapshot_path(home: Path) -> Path:
+    return home / ".relarn" / "tglarn-map.tsv"
+
+
+def _should_capture_map_snapshot(lines: list[str]) -> bool:
+    padded = lines + [""] * max(0, _TERMINAL_ROWS - len(lines))
+    return (
+        _is_map_display(
+            padded[:_MAP_ROWS],
+            padded[_STATS_START_ROW:_STATS_END_ROW],
+        )
+        and _detect_prompt(padded) is None
+    )
+
+
+def _read_map_snapshot(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0] != "TGLARN_MAP_V1":
+        return None
+
+    metadata: dict[str, str] = {}
+    index = 1
+    while index < len(lines) and lines[index] != "glyphs":
+        parts = lines[index].split("\t")
+        if parts:
+            metadata[parts[0]] = "\t".join(parts[1:])
+        index += 1
+    if index >= len(lines) or lines[index] != "glyphs":
+        return None
+
+    width = _coerce_int(metadata.get("width"))
+    height = _coerce_int(metadata.get("height"))
+    if width is None or height is None or width <= 0 or height <= 0:
+        return None
+
+    glyph_start = index + 1
+    glyphs = lines[glyph_start : glyph_start + height]
+    layers_marker = glyph_start + height
+    if layers_marker >= len(lines) or lines[layers_marker] != "layers":
+        return None
+    layers = lines[layers_marker + 1 : layers_marker + 1 + height]
+    if len(glyphs) != height or len(layers) != height:
+        return None
+    if any(len(row) != width for row in glyphs + layers):
+        return None
+
+    player = _parse_snapshot_player(metadata.get("player", ""))
+    return {
+        "version": 1,
+        "width": width,
+        "height": height,
+        "level": metadata.get("level", "unknown"),
+        "player": player,
+        "glyphs": glyphs,
+        "layers": layers,
+    }
+
+
+def _parse_snapshot_player(value: str) -> dict[str, int]:
+    parts = value.split("\t")
+    if len(parts) != 2:
+        return {}
+    x = _coerce_int(parts[0])
+    y = _coerce_int(parts[1])
+    if x is None or y is None:
+        return {}
+    return {"x": x, "y": y}
 
 
 def _state_pending_prompt(state: dict[str, Any] | None) -> dict[str, Any] | None:

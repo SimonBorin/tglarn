@@ -20,7 +20,9 @@ from tglarn_game.relarn_process import (
     _pan_start,
     _prompt_answer_from_command,
     _prompt_requires_enter,
+    _read_map_snapshot,
     _render_display_lines,
+    _should_capture_map_snapshot,
     _should_force_full_redraw,
     _TerminalCell,
 )
@@ -345,6 +347,51 @@ def test_full_redraw_skips_modal_screens() -> None:
     lines = ["Inventory", "Gold: $0", "a. a spear"]
 
     assert not _should_force_full_redraw(lines)
+
+
+def test_map_snapshot_capture_is_for_regular_map_screens_only() -> None:
+    lines = [" " * 80 for _ in range(25)]
+    lines[15] = " " * 26 + "@" + " " * 53
+    lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
+    lines[18] = "HP: 6 (8) STR=8 INT=14 WIS=12"
+
+    assert _should_capture_map_snapshot(lines)
+
+    lines[19] = "Do you (g) go inside, or (n) do nothing?"
+    assert not _should_capture_map_snapshot(lines)
+
+
+def test_read_map_snapshot_parses_canonical_map_dump(tmp_path) -> None:
+    snapshot_path = tmp_path / "tglarn-map.tsv"
+    snapshot_path.write_text(
+        "\n".join(
+            [
+                "TGLARN_MAP_V1",
+                "level\t1",
+                "player\t2\t1",
+                "width\t4",
+                "height\t2",
+                "glyphs",
+                ".+S.",
+                "  @.",
+                "layers",
+                "FOMO",
+                "UUPF",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert _read_map_snapshot(snapshot_path) == {
+        "version": 1,
+        "width": 4,
+        "height": 2,
+        "level": "1",
+        "player": {"x": 2, "y": 1},
+        "glyphs": [".+S.", "  @."],
+        "layers": ["FOMO", "UUPF"],
+    }
 
 
 def test_detect_prompt_extracts_spell_picklist_options() -> None:

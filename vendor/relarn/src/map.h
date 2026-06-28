@@ -81,6 +81,7 @@ void set_reveal(bool see);
 void udelobj(void);
 void heal_monsters(void);
 void get_level_copy_at(int index, struct Level *lev);
+void write_tglarn_map_snapshot(const char *path);
 
 void restore_global_world_from(const struct World *aWholeNewWorld);
 void stash_global_world_at(struct World *worldCopy);
