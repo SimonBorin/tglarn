@@ -269,6 +269,32 @@ def test_map_viewport_does_not_recenter_on_each_step() -> None:
     assert screen.splitlines()[8].index("$") == moved_screen.splitlines()[8].index("$")
 
 
+def test_map_viewport_uses_relarn_map_width_not_terminal_width() -> None:
+    lines = [" " * 80 for _ in range(25)]
+    lines[8] = " " * 60 + "@E" + " " * 10 + "!"
+    lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
+    lines[18] = "HP: 6 (8) STR=8 INT=14 WIS=12 CON=8 DEX=8 CHA=14 LV: H Gold: 0"
+
+    screen, _, status = _render_display_lines(lines, "max")
+    map_text = screen.split("Spells:", maxsplit=1)[0]
+
+    assert status["viewport_origin"]["left"] == 15
+    assert "@E" in map_text
+    assert "!" not in map_text
+
+
+def test_map_viewport_clamps_old_terminal_width_origin() -> None:
+    lines = [" " * 80 for _ in range(25)]
+    lines[8] = " " * 60 + "@E" + " " * 18
+    lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
+    lines[18] = "HP: 6 (8) STR=8 INT=14 WIS=12 CON=8 DEX=8 CHA=14 LV: H Gold: 0"
+    previous = {"left": 28, "top": 0, "level": "H", "map_view": "max"}
+
+    _, _, status = _render_display_lines(lines, "max", previous_viewport=previous)
+
+    assert status["viewport_origin"]["left"] == 15
+
+
 def test_map_viewport_does_not_pan_before_edge_margin() -> None:
     assert _pan_start(center=14, size=31, total=80, previous_start=10) == 10
     assert _pan_start(center=37, size=31, total=80, previous_start=10) == 10

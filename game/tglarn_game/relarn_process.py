@@ -27,6 +27,7 @@ from .models import GameAction, GameResponse, MapView
 
 _TERMINAL_COLUMNS = 80
 _TERMINAL_ROWS = 25
+_MAP_COLUMNS = 67
 _MAP_ROWS = 17
 _STATS_START_ROW = 17
 _STATS_END_ROW = 19
@@ -802,7 +803,10 @@ def _render_display_lines(
 ) -> tuple[str, list[str], dict[str, Any]]:
     width, map_height = _VIEWPORTS[map_view]
     padded = lines + [""] * max(0, _TERMINAL_ROWS - len(lines))
-    map_lines = padded[:_MAP_ROWS]
+    map_lines = [
+        line[:_MAP_COLUMNS].ljust(_MAP_COLUMNS)
+        for line in padded[:_MAP_ROWS]
+    ]
     stats_lines = padded[_STATS_START_ROW:_STATS_END_ROW]
     console_lines = padded[_CONSOLE_START_ROW:]
 
@@ -816,6 +820,7 @@ def _render_display_lines(
                 "screen_type": "modal",
                 "viewport": {"width": width, "height": map_height},
                 "terminal": {"width": _TERMINAL_COLUMNS, "height": _TERMINAL_ROWS},
+                "map": {"width": _MAP_COLUMNS, "height": _MAP_ROWS},
             },
         )
 
@@ -854,6 +859,7 @@ def _render_display_lines(
                 "map_view": map_view,
             },
             "terminal": {"width": _TERMINAL_COLUMNS, "height": _TERMINAL_ROWS},
+            "map": {"width": _MAP_COLUMNS, "height": _MAP_ROWS},
             "level": level,
             "position": {"x": player_x, "y": player_y} if player_x >= 0 else {},
         },
@@ -886,7 +892,7 @@ def _viewport_origin_for_player(
         previous_left = _coerce_int(previous_viewport.get("left"))
         previous_top = _coerce_int(previous_viewport.get("top"))
     return (
-        _pan_start(player_x, width, _TERMINAL_COLUMNS, previous_left),
+        _pan_start(player_x, width, _MAP_COLUMNS, previous_left),
         _pan_start(player_y, height, _MAP_ROWS, previous_top),
     )
 
