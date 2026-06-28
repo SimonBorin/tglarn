@@ -361,6 +361,9 @@ def test_map_snapshot_capture_includes_prompted_map_screens() -> None:
     lines[19] = "Do you (g) go inside, or (n) do nothing?"
     assert _should_capture_map_snapshot(lines)
 
+    lines[19] = "In what direction? "
+    assert _should_capture_map_snapshot(lines)
+
 
 def test_map_snapshot_capture_skips_modal_screens() -> None:
     assert not _should_capture_map_snapshot(["Inventory", "Gold: $0", "a. a spear"])

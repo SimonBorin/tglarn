@@ -1152,6 +1152,13 @@ cursor_getch() {
     return key;
 }
 
+static bool
+handle_tglarn_map_snapshot_key(int key) {
+    if (key != TGLARN_MAP_SNAPSHOT_KEY) { return false; }
+    write_tglarn_map_snapshot(getenv("TGLARN_MAP_SNAPSHOT"));
+    return true;
+}
+
 
 /* Given a string with various characters surrounded by parens, prompt
  * the user for one of those characters and return it.  ESC means quit
@@ -1178,10 +1185,7 @@ prompt(const char *question) {
     for (;;) {
         key = cursor_getch();
 
-        if (key == TGLARN_MAP_SNAPSHOT_KEY) {
-            write_tglarn_map_snapshot(getenv("TGLARN_MAP_SNAPSHOT"));
-            continue;
-        }
+        if (handle_tglarn_map_snapshot_key(key)) { continue; }
 
         // Ignore invalid keycodes
         if (key < 0 || key > sizeof(seeking)/sizeof(bool)) continue;
@@ -1377,7 +1381,12 @@ promptdir(bool allowCancel) {
         try = false;
 
         say("In what direction? ");
-        switch (cursor_getch()) {
+        int key;
+        do {
+            key = cursor_getch();
+        } while (handle_tglarn_map_snapshot_key(key));
+
+        switch (key) {
         case 'h': dir = DIR_WEST; break;
         case 'l': dir = DIR_EAST; break;
         case 'j': dir = DIR_SOUTH; break;
