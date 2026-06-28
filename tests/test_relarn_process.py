@@ -471,6 +471,25 @@ def test_choice_prompt_extracts_chest_options() -> None:
     }
 
 
+def test_choice_prompt_extracts_dealer_pad_options() -> None:
+    prompt = _detect_prompt(
+        [""] * 19
+        + [
+            "You have found Dealer McDope's Pad.",
+            "Do you (g) check it out, or (n) stay here?",
+        ]
+    )
+
+    assert prompt == {
+        "question": "Do you (g) check it out, or (n) stay here?",
+        "kind": "choice",
+        "options": [
+            {"key": "g", "label": "Check it out"},
+            {"key": "n", "label": "Stay here"},
+        ],
+    }
+
+
 def test_direction_prompt_accepts_movement_commands() -> None:
     prompt = _detect_prompt([""] * 19 + ["In what direction? "])
 
