@@ -132,7 +132,7 @@ tglarn_snapshot_glyph(int x, int y, char *layer) {
     // Bot snapshots should not hide a creature that can immediately attack.
     if (
         UU.blindCount == 0 &&
-        near_player(x, y) &&
+        (near_player(x, y) || recent_monster_contact_at(x, y)) &&
         ismon(here.mon) &&
         !cantsee(here.mon)
     ) {

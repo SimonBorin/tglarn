@@ -25,6 +25,22 @@ static bool spattack(enum SP_ATTACK attack, int xx, int yy);
 static void dropsomething (int x, int y, int mon_id);
 static void rustattack(const char *monster);
 
+static int RecentMonsterContactX = -1;
+static int RecentMonsterContactY = -1;
+
+
+static void
+remember_monster_contact_at(int x, int y) {
+    RecentMonsterContactX = x;
+    RecentMonsterContactY = y;
+}
+
+
+bool
+recent_monster_contact_at(int x, int y) {
+    return x == RecentMonsterContactX && y == RecentMonsterContactY;
+}
+
 
 // Return default monster hitpoints adjusted for challenge level
 short
@@ -162,6 +178,8 @@ hit_mon_melee(int x, int y) {
 
     struct Monster monst = at(x, y)->mon;
     if (!ismon(monst)) { return; }
+
+    remember_monster_contact_at(x, y);
 
     bool lemming_instakill = monst.id == LEMMING && !annoying_lemmings();
 
@@ -350,6 +368,8 @@ hitplayer (const int x, const int y) {
 
     mster = at(x, y)->mon.id;
     mname = monname(mster);
+
+    remember_monster_contact_at(x, y);
 
     bias = UU.challenge + 1;
 
