@@ -107,6 +107,75 @@ stash_global_world_at(struct World *worldCopy) {
     *worldCopy = W;
 }// stash_global_world_at
 
+static char
+tglarn_snapshot_glyph(int x, int y, char *layer) {
+    struct MapSquare here = *at(x, y);
+
+    if (x == UU.x && y == UU.y) {
+        *layer = 'P';
+        return '@';
+    }
+
+    bool in_fov = player_sees(x, y);
+    if (UU.monster_detection > 0 && ismon(here.mon)) {
+        *layer = 'M';
+        return monchar(here.mon.id);
+    }
+
+    if (!known(here)) {
+        *layer = 'U';
+        return ' ';
+    }
+
+    if (in_fov && ismon(here.mon) && !cantsee(here.mon)) {
+        *layer = 'M';
+        return monchar(here.mon.id);
+    }
+
+    if (here.recalled.type == ONONE) {
+        *layer = 'F';
+        return '.';
+    }
+
+    char symbol = Types[here.recalled.type].symbol;
+    *layer = here.recalled.type == OWALL || symbol == '#' ? 'W' : 'O';
+    return symbol == ' ' ? '.' : symbol;
+}
+
+void
+write_tglarn_map_snapshot(const char *path) {
+    if (!path || !*path || getlevel() < 0) { return; }
+
+    FILE *fh = fopen(path, "w");
+    if (!fh) { return; }
+
+    char glyphs[MAXY][MAXX];
+    char layers[MAXY][MAXX];
+    for (int y = 0; y < MAXY; y++) {
+        for (int x = 0; x < MAXX; x++) {
+            glyphs[y][x] = tglarn_snapshot_glyph(x, y, &layers[y][x]);
+        }
+    }
+
+    fprintf(fh, "TGLARN_MAP_V1\n");
+    fprintf(fh, "level\t%d\n", getlevel());
+    fprintf(fh, "player\t%d\t%d\n", UU.x, UU.y);
+    fprintf(fh, "width\t%d\n", MAXX);
+    fprintf(fh, "height\t%d\n", MAXY);
+    fprintf(fh, "glyphs\n");
+    for (int y = 0; y < MAXY; y++) {
+        fwrite(glyphs[y], 1, MAXX, fh);
+        fputc('\n', fh);
+    }
+    fprintf(fh, "layers\n");
+    for (int y = 0; y < MAXY; y++) {
+        fwrite(layers[y], 1, MAXX, fh);
+        fputc('\n', fh);
+    }
+
+    fclose(fh);
+}
+
 
 const char *
 getlevelname() {

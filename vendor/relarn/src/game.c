@@ -1,6 +1,8 @@
 // This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
+#include <stdlib.h>
+
 #include "game.h"
 
 #include "internal_assert.h"
@@ -23,6 +25,7 @@
 #include "savegame.h"
 
 #define AUTOSAVE_INTERVAL 100       // TODO: make this user-configurable
+#define TGLARN_MAP_SNAPSHOT_KEY 7   // Internal bot bridge command, Ctrl+G.
 
 
 static bool player_action(char key);
@@ -191,6 +194,12 @@ show_inventory() {
     inv_pick(title, 0, PRM_NONE);
 }/* show_inventory*/
 
+static void
+write_tglarn_map_snapshot_command() {
+    const char *path = getenv("TGLARN_MAP_SNAPSHOT");
+    write_tglarn_map_snapshot(path);
+}
+
 
 static bool
 player_action(char key) {
@@ -246,6 +255,10 @@ player_action(char key) {
     case 12:    /* ^R */
     case 18:    /* ^L */
         redraw();
+        break;
+
+    case TGLARN_MAP_SNAPSHOT_KEY:
+        write_tglarn_map_snapshot_command();
         break;
 
     default:
