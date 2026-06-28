@@ -218,19 +218,7 @@ def _engine_state_has_started_game(state: Any) -> bool:
 
 
 def _session_engine_state(session: dict[str, Any]) -> Any:
-    state = session.get("engine_state")
-    if not isinstance(state, dict) or "pending_prompt" in state:
-        return state
-
-    last_status = session.get("last_status")
-    if not isinstance(last_status, dict):
-        return state
-
-    pending_prompt = last_status.get("pending_prompt")
-    if not isinstance(pending_prompt, dict):
-        return state
-
-    return state | {"pending_prompt": pending_prompt}
+    return session.get("engine_state")
 
 
 def _character_state(character_class: str, gender: str) -> dict[str, str]:
