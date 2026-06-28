@@ -313,7 +313,7 @@ async def test_service_applies_command_and_persists_state() -> None:
 
 
 @pytest.mark.asyncio
-async def test_service_restores_pending_prompt_from_last_status_for_text_fallback() -> None:
+async def test_service_ignores_stale_pending_prompt_from_last_status() -> None:
     pending_prompt = {
         "question": "Do you (g) quaff it, (t) take it, or (n) do nothing?",
         "kind": "choice",
@@ -339,9 +339,7 @@ async def test_service_restores_pending_prompt_from_last_status_for_text_fallbac
     await service.apply_command(1001, "t")
 
     assert adapter.applied_command == "t"
-    assert adapter.applied_state == initial_state | {
-        "pending_prompt": pending_prompt,
-    }
+    assert adapter.applied_state == initial_state
 
 
 @pytest.mark.asyncio
