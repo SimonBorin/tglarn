@@ -1,3 +1,4 @@
+from PIL import Image
 from tglarn_bot.animations import (
     CREDIT_TEXTS,
     CREDITS_BODY_FONT_SIZE,
@@ -18,7 +19,8 @@ def test_splash_uses_five_loading_frames() -> None:
 def test_credits_include_bot_and_upstream_authors() -> None:
     credits = "\n".join(CREDIT_TEXTS)
 
-    assert "Simon.A.Borin@ringcentral.com" in credits
+    assert "Simon.A.Borin" in credits
+    assert "@ringcentral.com" in credits
     assert "Codex" in credits
     assert "Noah Morgan" in credits
     assert "Phil Cordier" in credits
@@ -32,7 +34,19 @@ def test_credits_use_larger_cached_frames() -> None:
 
     assert len(paths) == len(CREDIT_TEXTS)
     assert CREDITS_CACHE_NAMESPACE in str(paths[0].parent)
-    assert CREDITS_BODY_FONT_SIZE >= 40
+    assert CREDITS_BODY_FONT_SIZE >= 60
+
+    with Image.open(paths[0]) as image:
+        bright_text_pixels = []
+        for y in range(image.height):
+            for x in range(image.width):
+                r, g, b = image.getpixel((x, y))
+                if r > 235 and g > 205 and b > 175:
+                    bright_text_pixels.append((x, y))
+
+    text_top = min(y for _, y in bright_text_pixels)
+    text_bottom = max(y for _, y in bright_text_pixels)
+    assert text_bottom - text_top > 320
 
 
 def test_splash_image_asset_is_packaged_in_source_tree() -> None:

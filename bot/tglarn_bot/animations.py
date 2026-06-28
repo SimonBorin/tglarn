@@ -8,10 +8,10 @@ from pathlib import Path
 
 SPLASH_DELAY_SECONDS = 0.5
 CREDITS_DELAY_SECONDS = 1.2
-CREDITS_CACHE_NAMESPACE = "credits-v2"
-CREDITS_TITLE_FONT_SIZE = 58
-CREDITS_BODY_FONT_SIZE = 42
-CREDITS_MIN_BODY_FONT_SIZE = 30
+CREDITS_CACHE_NAMESPACE = "credits-v3"
+CREDITS_TITLE_FONT_SIZE = 84
+CREDITS_BODY_FONT_SIZE = 68
+CREDITS_MIN_BODY_FONT_SIZE = 48
 
 SPLASH_CAPTIONS = (
     "Loading LARN [#----]",
@@ -22,11 +22,11 @@ SPLASH_CAPTIONS = (
 )
 
 CREDIT_TEXTS = (
-    "TGLarn Bot Creator\nSimon.A.Borin@ringcentral.com",
+    "TGLarn Bot Creator\nSimon.A.Borin\n@ringcentral.com",
     "Created by Codex",
     "Original Larn\nNoah Morgan",
     "ULarn\nPhil Cordier",
-    "iLarn\nBridgit Spitznagel / i0lanthe",
+    "iLarn\nBridgit Spitznagel\ni0lanthe",
     "ReLarn\nChris Reuter",
     "libfov\nGreg McIntyre",
     "Inconsolata Font\nRaph Levien and collaborators",
@@ -80,8 +80,8 @@ def credits_frame_paths() -> list[Path]:
                 min_size=CREDITS_MIN_BODY_FONT_SIZE,
                 max_width=frame.size[0] - 48,
             )
-            _draw_centered_text(draw, frame.size, title, font_title, y=32)
-            _draw_centered_text(draw, frame.size, text, font_body, y=frame.size[1] - 206)
+            _draw_centered_text(draw, frame.size, title, font_title, y=18)
+            _draw_centered_text(draw, frame.size, text, font_body, y=frame.size[1] - 276)
             frame.convert("RGB").save(expected[index])
     return expected
 
