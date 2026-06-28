@@ -734,16 +734,33 @@ troom(int lv, int xsize, int ysize, int tx, int ty, enum DOORTRAP_RISK dtr) {
 
 
 // Initialize the current level as the town level.
+#define TGLARN_TOWN_CENTER_X (MAXX / 2)
+#define TGLARN_TOWN_CENTER_Y (MAXY / 2)
+
+static void
+place_tglarn_town_object(enum OBJECT_ID id, int dx, int dy) {
+    int x = TGLARN_TOWN_CENTER_X + dx;
+    int y = TGLARN_TOWN_CENTER_Y + dy;
+    ASSERT(inbounds(x, y));
+    ASSERT(at(x, y)->obj.type == ONONE);
+    at(x, y)->obj = obj(id, 0);
+}
+
 static void
 mktown() {
-    fillroom(obj(OENTRANCE,0)); /*  entrance to dungeon*/
-    fillroom(obj(ODNDSTORE,0)); /*  the DND STORE   */
-    fillroom(obj(OSCHOOL,0));   /*  college of Larn */
-    fillroom(obj(OBANK,0));     /*  1st national bank of larn*/
-    fillroom(obj(OVOLDOWN,0));  /*  volcano shaft to temple*/
-    fillroom(obj(OHOME,0));     /*  the players home & family*/
-    fillroom(obj(OTRADEPOST,0));/*  the trading post    */
-    fillroom(obj(OLRS,0));      /*  the larn revenue service */
+    UU.x = TGLARN_TOWN_CENTER_X;
+    UU.y = TGLARN_TOWN_CENTER_Y;
+    UU.prev_x = UU.x;
+    UU.prev_y = UU.y;
+
+    place_tglarn_town_object(OENTRANCE,   4,  0); /* entrance to dungeon */
+    place_tglarn_town_object(ODNDSTORE,   0, -3); /* the DND STORE */
+    place_tglarn_town_object(OSCHOOL,    -4, -3); /* college of Larn */
+    place_tglarn_town_object(OBANK,       4, -3); /* 1st national bank of larn */
+    place_tglarn_town_object(OVOLDOWN,    8,  0); /* volcano shaft to temple */
+    place_tglarn_town_object(OHOME,      -4,  0); /* the players home & family */
+    place_tglarn_town_object(OTRADEPOST,  0,  3); /* the trading post */
+    place_tglarn_town_object(OLRS,       -8,  0); /* the larn revenue service */
 }/* mktown*/
 
 
