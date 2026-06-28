@@ -17,6 +17,7 @@ from tglarn_game.relarn_process import (
     _detect_prompt,
     _game_over_log_lines,
     _is_game_over_display,
+    _modal_exit_key,
     _next_viewport_origin,
     _pan_start,
     _prompt_answer_from_command,
@@ -480,6 +481,43 @@ def test_indexed_picklist_prompt_answers_move_to_selected_row() -> None:
 
     assert answer == "2"
     assert _prompt_answer_keys(answer, prompt) == [b"j", b"j", b"\n"]
+
+
+def test_modal_exit_key_closes_dealer_result_page() -> None:
+    lines = [
+        "",
+        "",
+        "                         Whattaya trying to pull on me?",
+        "                         You aint got the cash!",
+        "",
+        "    ---- Press return or escape to exit ---- ",
+    ]
+
+    assert _modal_exit_key(lines) == b"\x1b"
+
+
+def test_modal_exit_key_closes_dealer_picklist() -> None:
+    lines = [
+        "Hey man, welcome to Dealer McDope's Pad! I gots the some of the finest",
+        "shit you'll find anywhere in Larn -- check it out...",
+        "Looks like you got about 244 bucks on you.",
+        "     Killer Speed                       100 bucks",
+        "     Groovy Acid                        250 bucks",
+        "Up:k/CTRL+p/UP Down:j/CTRL+n/DOWN Select:ENTER Quit:ESC/CTRL+x",
+        "To select an individual item, type the corresponding",
+        "key; CTRL+v escapes.",
+    ]
+
+    assert _modal_exit_key(lines) == b"\x1b"
+
+
+def test_modal_exit_key_leaves_regular_map_ready_to_save() -> None:
+    lines = [" " * 80 for _ in range(25)]
+    lines[15] = " " * 26 + "@" + " " * 53
+    lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
+    lines[18] = "HP: 6 (8) STR=8 INT=14 WIS=12"
+
+    assert _modal_exit_key(lines) is None
 
 
 def test_choice_prompt_ignores_answer_echo() -> None:
