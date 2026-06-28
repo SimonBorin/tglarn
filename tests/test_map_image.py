@@ -57,8 +57,10 @@ def test_render_game_image_creates_png_from_text_only_response() -> None:
         assert rendered.path.exists()
         assert "Cast which spell?" not in rendered.caption
         with Image.open(rendered.path) as image:
-            assert image.size[0] >= 520
-            assert image.size[1] > 80
+            assert image.size == (
+                _IMAGE_VIEWPORT_WIDTH * _TILE + _PADDING * 2,
+                _IMAGE_VIEWPORT_HEIGHT * _TILE + _PADDING * 2,
+            )
             assert image.convert("L").getextrema()[0] != image.convert("L").getextrema()[1]
     finally:
         cleanup_rendered_game_image(rendered)
