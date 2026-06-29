@@ -16,6 +16,7 @@ from tglarn_game import GameResponse, PlaceholderGameAdapter
 from tglarn_game.relarn_process import (
     _detect_prompt,
     _game_over_log_lines,
+    _inventory_item_from_command,
     _is_game_over_display,
     _modal_exit_key,
     _next_viewport_origin,
@@ -484,7 +485,7 @@ def test_indexed_picklist_prompt_answers_move_to_selected_row() -> None:
     assert _prompt_answer_keys(answer, prompt) == [b"j", b"j", b"\n"]
 
 
-def test_detect_prompt_extracts_inventory_actions() -> None:
+def test_detect_prompt_extracts_inventory_items() -> None:
     prompt = _detect_prompt(
         [
             "Inventory",
@@ -500,30 +501,58 @@ def test_detect_prompt_extracts_inventory_actions() -> None:
         ]
     )
 
-    assert prompt == {
-        "question": "Choose an inventory action.",
+    assert prompt is not None
+    assert prompt["question"] == "Choose an inventory item."
+    assert prompt["kind"] == "inventory"
+    assert [(option["key"], option["label"]) for option in prompt["options"]] == [
+        ("a", "a. magic potion"),
+        ("b", "b. scroll of create artifact"),
+        ("c", "c. magic scroll"),
+        ("d", "d. sparkling sapphire"),
+        ("e", "e. enchanting emerald"),
+        ("f", "f. speed"),
+    ]
+    assert prompt["options"][0]["actions"] == [
+        {"key": "quaff:a", "label": "Quaff"},
+        {"key": "drop:a", "label": "Drop"},
+    ]
+    assert prompt["options"][1]["actions"] == [
+        {"key": "read:b", "label": "Read"},
+        {"key": "drop:b", "label": "Drop"},
+    ]
+    assert prompt["options"][5]["actions"] == [
+        {"key": "drop:f", "label": "Drop"},
+    ]
+
+
+def test_inventory_prompt_selects_item_for_action_submenu() -> None:
+    prompt = {
+        "question": "Choose an inventory item.",
         "kind": "inventory",
         "options": [
-            {"key": "quaff:a", "label": "Quaff a. magic potion"},
-            {"key": "drop:a", "label": "Drop a. magic potion"},
-            {"key": "read:b", "label": "Read b. scroll of create artifact"},
-            {"key": "drop:b", "label": "Drop b. scroll of create artifact"},
-            {"key": "read:c", "label": "Read c. magic scroll"},
-            {"key": "drop:c", "label": "Drop c. magic scroll"},
-            {"key": "drop:d", "label": "Drop d. sparkling sapphire"},
-            {"key": "drop:e", "label": "Drop e. enchanting emerald"},
-            {"key": "drop:f", "label": "Drop f. speed"},
+            {
+                "key": "a",
+                "label": "a. magic potion",
+                "item_label": "a magic potion",
+                "actions": [
+                    {"key": "quaff:a", "label": "Quaff"},
+                    {"key": "drop:a", "label": "Drop"},
+                ],
+            },
         ],
     }
 
+    assert _inventory_item_from_command("invitem:a", prompt) == "a"
+    assert _prompt_answer_from_command("invitem:a", prompt) is None
 
-def test_inventory_prompt_answers_send_item_action_without_reopening_inventory() -> None:
+
+def test_inventory_action_prompt_answers_send_item_action_without_reopening_inventory() -> None:
     prompt = {
-        "question": "Choose an inventory action.",
-        "kind": "inventory",
+        "question": "Choose action for a. magic potion.",
+        "kind": "inventory_action",
         "options": [
-            {"key": "quaff:a", "label": "Quaff a. magic potion"},
-            {"key": "drop:a", "label": "Drop a. magic potion"},
+            {"key": "quaff:a", "label": "Quaff"},
+            {"key": "drop:a", "label": "Drop"},
         ],
     }
 

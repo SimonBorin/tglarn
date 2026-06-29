@@ -255,6 +255,8 @@ def _pending_prompt_actions(pending_prompt) -> list[GameAction]:
     if kind == "indexed_picklist":
         command_prefix = "pick:"
     elif kind == "inventory":
+        command_prefix = "invitem:"
+    elif kind == "inventory_action":
         command_prefix = "inv:"
     else:
         command_prefix = "prompt:"

@@ -178,18 +178,18 @@ def test_game_keyboard_renders_status_only_potion_prompt_options() -> None:
     assert f"{CallbackData.GAME_PREFIX}prompt:t" in callback_data
 
 
-def test_game_keyboard_renders_status_only_inventory_actions() -> None:
+def test_game_keyboard_renders_status_only_inventory_items() -> None:
     response = GameResponse(
         state={},
         screen="Inventory\nGold: $144\na.   a magic potion",
         status={
             "screen_type": "modal",
             "pending_prompt": {
-                "question": "Choose an inventory action.",
+                "question": "Choose an inventory item.",
                 "kind": "inventory",
                 "options": [
-                    {"key": "quaff:a", "label": "Quaff a. magic potion"},
-                    {"key": "drop:a", "label": "Drop a. magic potion"},
+                    {"key": "a", "label": "a. magic potion"},
+                    {"key": "b", "label": "b. scroll of create artifact"},
                 ],
             },
         },
@@ -198,8 +198,34 @@ def test_game_keyboard_renders_status_only_inventory_actions() -> None:
     texts = _button_texts(game_keyboard(response))
     callback_data = _button_callback_data(game_keyboard(response))
 
-    assert "Quaff a. magic potion" in texts
-    assert "Drop a. magic potion" in texts
+    assert "a. magic potion" in texts
+    assert "b. scroll of create artifact" in texts
+    assert f"{CallbackData.GAME_PREFIX}invitem:a" in callback_data
+    assert f"{CallbackData.GAME_PREFIX}invitem:b" in callback_data
+
+
+def test_game_keyboard_renders_status_only_inventory_action_submenu() -> None:
+    response = GameResponse(
+        state={},
+        screen="Inventory\nGold: $144\na.   a magic potion",
+        status={
+            "screen_type": "modal",
+            "pending_prompt": {
+                "question": "Choose action for a. magic potion.",
+                "kind": "inventory_action",
+                "options": [
+                    {"key": "quaff:a", "label": "Quaff"},
+                    {"key": "drop:a", "label": "Drop"},
+                ],
+            },
+        },
+    )
+
+    texts = _button_texts(game_keyboard(response))
+    callback_data = _button_callback_data(game_keyboard(response))
+
+    assert "Quaff" in texts
+    assert "Drop" in texts
     assert f"{CallbackData.GAME_PREFIX}inv:quaff:a" in callback_data
     assert f"{CallbackData.GAME_PREFIX}inv:drop:a" in callback_data
 
