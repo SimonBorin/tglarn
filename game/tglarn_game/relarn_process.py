@@ -116,6 +116,7 @@ _DIRECTION_PROMPT_OPTIONS = (
     {"key": "j", "label": "S"},
     {"key": "n", "label": "SE"},
 )
+_DIRECTION_PROMPT_KEYS = {option["key"] for option in _DIRECTION_PROMPT_OPTIONS}
 _CONTINUE_PROMPT = "Press ENTER, ESCAPE or SPACE to continue:"
 _GAME_OVER_MARKERS = (
     "Alas, you have died.",
@@ -468,7 +469,7 @@ class RelarnProcessAdapter:
         if save_blob is None:
             raise RuntimeError("ReLarn did not write a savefile")
 
-        prompt = _detect_prompt(display_lines)
+        prompt = _pending_prompt_from_display(display_lines, keys)
         encoded_save = base64.b64encode(save_blob).decode("ascii")
         next_state: dict[str, Any] = {
             "adapter": "relarn_process",
@@ -789,7 +790,27 @@ def _read_process_to_exit(
 
 
 def _should_keep_base_save_for_prompt(lines: list[str], keys: list[bytes]) -> bool:
-    return bool(keys) and _detect_prompt(lines) is not None
+    return bool(keys) and _pending_prompt_from_display(lines, keys) is not None
+
+
+def _pending_prompt_from_display(
+    lines: list[str],
+    keys: list[bytes],
+) -> dict[str, Any] | None:
+    prompt = _detect_prompt(lines)
+    if prompt is not None and _prompt_was_answered_by_keys(prompt, keys):
+        return None
+    return prompt
+
+
+def _prompt_was_answered_by_keys(prompt: dict[str, Any], keys: list[bytes]) -> bool:
+    if prompt.get("kind") != _PROMPT_KIND_DIRECTION or not keys:
+        return False
+    try:
+        last_key = keys[-1].decode("ascii").lower()
+    except UnicodeDecodeError:
+        return False
+    return last_key in _DIRECTION_PROMPT_KEYS
 
 
 def _close_transient_screens_before_save(

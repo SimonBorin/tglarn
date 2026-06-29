@@ -21,6 +21,7 @@ from tglarn_game.relarn_process import (
     _modal_exit_key,
     _next_viewport_origin,
     _pan_start,
+    _pending_prompt_from_display,
     _prompt_answer_from_command,
     _prompt_answer_keys,
     _prompt_replays_trigger,
@@ -443,6 +444,21 @@ def test_prompt_screens_keep_base_save_instead_of_saving_prompt_process() -> Non
     map_lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
     map_lines[18] = "HP: 6 (8) STR=8 INT=14 WIS=12"
     assert not _should_keep_base_save_for_prompt(map_lines, [b"l"])
+
+
+def test_answered_direction_prompt_does_not_keep_base_save() -> None:
+    lines = [" " * 80 for _ in range(25)]
+    lines[15] = " " * 26 + "@" + " " * 53
+    lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
+    lines[18] = "HP: 6 (8) STR=8 INT=14 WIS=12"
+    lines[19] = "In what direction?"
+    lines[20] = "The hobgoblin died!"
+
+    keys = [b"c", b"b", b"\n", b"h"]
+
+    assert _detect_prompt(lines) is not None
+    assert _pending_prompt_from_display(lines, keys) is None
+    assert not _should_keep_base_save_for_prompt(lines, keys)
 
 
 def test_detect_prompt_extracts_dealer_picklist_options() -> None:
