@@ -48,6 +48,10 @@ class Settings(BaseSettings):
         default=0.12,
         alias="RELARN_CYCLE_SETTLE_SECONDS",
     )
+    active_session_ttl_seconds: float = Field(
+        default=180.0,
+        alias="ACTIVE_SESSION_TTL_SECONDS",
+    )
     repository_url: str = Field(
         default="https://github.com/SimonBorin/tglarn",
         alias="REPOSITORY_URL",
