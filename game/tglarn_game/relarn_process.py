@@ -56,10 +56,53 @@ _CONFIRM_LABELS = {"y": "Yes", "n": "No"}
 _PROMPT_KIND_CHOICE = "choice"
 _PROMPT_KIND_DIRECTION = "direction"
 _PROMPT_KIND_INDEXED_PICKLIST = "indexed_picklist"
+_PROMPT_KIND_INVENTORY = "inventory"
 _PROMPT_KIND_PICKLIST = "picklist"
+_INVENTORY_COMMAND_PREFIX = "inv:"
 _PICKLIST_COMMAND_PREFIX = "pick:"
 _STORE_PICKLIST_OPTION_RE = re.compile(
     r"^\*?\s*(?P<label>[A-Za-z][A-Za-z' -]*?)\s+(?P<price>\d+)\s+bucks$"
+)
+_INVENTORY_ACTION_KEYS = {
+    "drop": b"d",
+    "eat": b"e",
+    "quaff": b"q",
+    "read": b"r",
+    "wear": b"W",
+    "wield": b"w",
+}
+_INVENTORY_EDIBLE_WORDS = ("cookie",)
+_INVENTORY_QUAFFABLE_WORDS = ("potion",)
+_INVENTORY_READABLE_WORDS = ("book", "scroll")
+_INVENTORY_WEARABLE_WORDS = (
+    "armor",
+    "chain",
+    "leather",
+    "mail",
+    "plate",
+    "shield",
+)
+_INVENTORY_WIELDABLE_WORDS = (
+    "amulet",
+    "axe",
+    "belt",
+    "cube",
+    "dagger",
+    "device",
+    "flail",
+    "hammer",
+    "hand of fear",
+    "lance",
+    "orb",
+    "ring",
+    "scarab",
+    "slayer",
+    "spear",
+    "staff",
+    "sword",
+    "talisman",
+    "vorpal",
+    "wand",
 )
 _DIRECTION_PROMPT_OPTIONS = (
     {"key": "y", "label": "NW"},
@@ -287,7 +330,9 @@ class RelarnProcessAdapter:
         viewport_origin = _state_viewport_origin(state, map_view)
         if viewport_origin is not None:
             prompt_state["viewport_origin"] = viewport_origin
-        replay_keys = [key.encode("ascii") for key in trigger_keys]
+        replay_keys = []
+        if _prompt_replays_trigger(pending_prompt):
+            replay_keys.extend(key.encode("ascii") for key in trigger_keys)
         replay_keys.extend(_prompt_answer_keys(answer, pending_prompt))
         return self._run_cycle(prompt_state, replay_keys, map_view, [])
 
@@ -879,6 +924,17 @@ def _prompt_answer_from_command(
 ) -> str | None:
     if pending_prompt is None:
         return None
+    if pending_prompt.get("kind") == _PROMPT_KIND_INVENTORY:
+        if not normalized_command.startswith(_INVENTORY_COMMAND_PREFIX):
+            return None
+        answer = normalized_command.removeprefix(_INVENTORY_COMMAND_PREFIX).strip()
+        options = pending_prompt.get("options", [])
+        allowed = {
+            str(option.get("key", ""))
+            for option in options
+            if isinstance(option, dict)
+        }
+        return answer if answer in allowed and _inventory_answer_keys(answer) else None
     if pending_prompt.get("kind") == _PROMPT_KIND_INDEXED_PICKLIST:
         if not normalized_command.startswith(_PICKLIST_COMMAND_PREFIX):
             return None
@@ -911,6 +967,8 @@ def _prompt_answer_from_command(
 
 
 def _prompt_answer_keys(answer: str, pending_prompt: dict[str, Any]) -> list[bytes]:
+    if pending_prompt.get("kind") == _PROMPT_KIND_INVENTORY:
+        return _inventory_answer_keys(answer)
     if pending_prompt.get("kind") == _PROMPT_KIND_INDEXED_PICKLIST:
         index = int(answer)
         return [b"j"] * index + [b"\n"]
@@ -919,6 +977,20 @@ def _prompt_answer_keys(answer: str, pending_prompt: dict[str, Any]) -> list[byt
     if _prompt_requires_enter(pending_prompt):
         keys.append(b"\n")
     return keys
+
+
+def _prompt_replays_trigger(pending_prompt: dict[str, Any]) -> bool:
+    return pending_prompt.get("kind") != _PROMPT_KIND_INVENTORY
+
+
+def _inventory_answer_keys(answer: str) -> list[bytes]:
+    action, separator, item_key = answer.partition(":")
+    if not separator or len(item_key) != 1:
+        return []
+    action_key = _INVENTORY_ACTION_KEYS.get(action)
+    if action_key is None:
+        return []
+    return [action_key, item_key.encode("ascii")]
 
 
 def _prompt_requires_enter(pending_prompt: dict[str, Any]) -> bool:
@@ -1292,6 +1364,9 @@ def _detect_prompt(lines: list[str]) -> dict[str, Any] | None:
     indexed_picklist_prompt = _detect_indexed_picklist_prompt(lines)
     if indexed_picklist_prompt is not None:
         return indexed_picklist_prompt
+    inventory_prompt = _detect_inventory_prompt(lines)
+    if inventory_prompt is not None:
+        return inventory_prompt
 
     text = " ".join(line.strip() for line in lines[_CONSOLE_START_ROW:] if line.strip())
     if not text:
@@ -1355,6 +1430,95 @@ def _detect_indexed_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
         "kind": _PROMPT_KIND_INDEXED_PICKLIST,
         "options": options,
     }
+
+
+def _detect_inventory_prompt(lines: list[str]) -> dict[str, Any] | None:
+    nonempty = [
+        line.strip()
+        for line in lines
+        if line.strip() and not _is_modal_ui_hint(line)
+    ]
+    if not nonempty or nonempty[0] != "Inventory":
+        return None
+
+    items = _inventory_items(nonempty[1:])
+    options = _inventory_action_options(items)
+    if not options:
+        return None
+    return {
+        "question": "Choose an inventory action.",
+        "kind": _PROMPT_KIND_INVENTORY,
+        "options": options,
+    }
+
+
+def _inventory_items(lines: list[str]) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    for line in lines:
+        if line.startswith("Gold:"):
+            continue
+        match = _PICKLIST_OPTION_RE.match(line)
+        if match is None:
+            continue
+        items.append(
+            {
+                "key": match.group(1).lower(),
+                "label": " ".join(match.group(2).split()),
+            }
+        )
+    return items
+
+
+def _inventory_action_options(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    options: list[dict[str, str]] = []
+    for item in items:
+        key = item["key"]
+        label = item["label"]
+        lowered = label.lower()
+        wearable = _contains_any(lowered, _INVENTORY_WEARABLE_WORDS)
+        if _contains_any(lowered, _INVENTORY_QUAFFABLE_WORDS):
+            options.append(_inventory_action_option("quaff", key, label))
+        if _contains_any(lowered, _INVENTORY_READABLE_WORDS):
+            options.append(_inventory_action_option("read", key, label))
+        if _contains_any(lowered, _INVENTORY_EDIBLE_WORDS):
+            options.append(_inventory_action_option("eat", key, label))
+        if wearable:
+            options.append(_inventory_action_option("wear", key, label))
+        elif _contains_any(lowered, _INVENTORY_WIELDABLE_WORDS):
+            options.append(_inventory_action_option("wield", key, label))
+        options.append(_inventory_action_option("drop", key, label))
+    return options
+
+
+def _contains_any(text: str, needles: tuple[str, ...]) -> bool:
+    return any(needle in text for needle in needles)
+
+
+def _inventory_action_option(action: str, item_key: str, item_label: str) -> dict[str, str]:
+    return {
+        "key": f"{action}:{item_key}",
+        "label": f"{_inventory_action_label(action)} {item_key}. "
+        f"{_short_inventory_label(item_label)}",
+    }
+
+
+def _inventory_action_label(action: str) -> str:
+    return {
+        "drop": "Drop",
+        "eat": "Eat",
+        "quaff": "Quaff",
+        "read": "Read",
+        "wear": "Wear",
+        "wield": "Wield",
+    }[action]
+
+
+def _short_inventory_label(label: str) -> str:
+    lowered = label.lower()
+    for article in ("a ", "an ", "the ", "some "):
+        if lowered.startswith(article):
+            return label[len(article) :]
+    return label
 
 
 def _picklist_options(lines: list[str]) -> list[dict[str, str]]:
@@ -1438,11 +1602,12 @@ def _prompt_option_label(key: str, phrase: str) -> str:
 def _prompt_actions(options: list[dict[str, str]], kind: str = "") -> list[GameAction]:
     if kind == _PROMPT_KIND_DIRECTION:
         return []
-    command_prefix = (
-        _PICKLIST_COMMAND_PREFIX
-        if kind == _PROMPT_KIND_INDEXED_PICKLIST
-        else _PROMPT_COMMAND_PREFIX
-    )
+    if kind == _PROMPT_KIND_INVENTORY:
+        command_prefix = _INVENTORY_COMMAND_PREFIX
+    elif kind == _PROMPT_KIND_INDEXED_PICKLIST:
+        command_prefix = _PICKLIST_COMMAND_PREFIX
+    else:
+        command_prefix = _PROMPT_COMMAND_PREFIX
     return [
         GameAction(
             id=f"prompt_{option['key']}",

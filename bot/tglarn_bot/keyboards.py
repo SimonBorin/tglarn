@@ -251,7 +251,13 @@ def _pending_prompt_actions(pending_prompt) -> list[GameAction]:
         return []
     if pending_prompt.get("kind") == "direction":
         return []
-    command_prefix = "pick:" if pending_prompt.get("kind") == "indexed_picklist" else "prompt:"
+    kind = pending_prompt.get("kind")
+    if kind == "indexed_picklist":
+        command_prefix = "pick:"
+    elif kind == "inventory":
+        command_prefix = "inv:"
+    else:
+        command_prefix = "prompt:"
     options = pending_prompt.get("options")
     if not isinstance(options, list):
         return []

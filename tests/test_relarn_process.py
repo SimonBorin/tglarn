@@ -22,6 +22,7 @@ from tglarn_game.relarn_process import (
     _pan_start,
     _prompt_answer_from_command,
     _prompt_answer_keys,
+    _prompt_replays_trigger,
     _prompt_requires_enter,
     _read_map_snapshot,
     _render_display_lines,
@@ -481,6 +482,56 @@ def test_indexed_picklist_prompt_answers_move_to_selected_row() -> None:
 
     assert answer == "2"
     assert _prompt_answer_keys(answer, prompt) == [b"j", b"j", b"\n"]
+
+
+def test_detect_prompt_extracts_inventory_actions() -> None:
+    prompt = _detect_prompt(
+        [
+            "Inventory",
+            "Gold: $144",
+            "a.   a magic potion",
+            "b.   a scroll of create artifact",
+            "c.   a magic scroll",
+            "d.   a sparkling sapphire",
+            "e.   an enchanting emerald",
+            "f.   some speed",
+            "Up:k/CTRL+p/UP Down:j/CTRL+n/DOWN Select:ENTER",
+            "Quit:ESC/CTRL+x",
+        ]
+    )
+
+    assert prompt == {
+        "question": "Choose an inventory action.",
+        "kind": "inventory",
+        "options": [
+            {"key": "quaff:a", "label": "Quaff a. magic potion"},
+            {"key": "drop:a", "label": "Drop a. magic potion"},
+            {"key": "read:b", "label": "Read b. scroll of create artifact"},
+            {"key": "drop:b", "label": "Drop b. scroll of create artifact"},
+            {"key": "read:c", "label": "Read c. magic scroll"},
+            {"key": "drop:c", "label": "Drop c. magic scroll"},
+            {"key": "drop:d", "label": "Drop d. sparkling sapphire"},
+            {"key": "drop:e", "label": "Drop e. enchanting emerald"},
+            {"key": "drop:f", "label": "Drop f. speed"},
+        ],
+    }
+
+
+def test_inventory_prompt_answers_send_item_action_without_reopening_inventory() -> None:
+    prompt = {
+        "question": "Choose an inventory action.",
+        "kind": "inventory",
+        "options": [
+            {"key": "quaff:a", "label": "Quaff a. magic potion"},
+            {"key": "drop:a", "label": "Drop a. magic potion"},
+        ],
+    }
+
+    answer = _prompt_answer_from_command("inv:quaff:a", prompt)
+
+    assert answer == "quaff:a"
+    assert _prompt_answer_keys(answer, prompt) == [b"q", b"a"]
+    assert not _prompt_replays_trigger(prompt)
 
 
 def test_modal_exit_key_closes_dealer_result_page() -> None:

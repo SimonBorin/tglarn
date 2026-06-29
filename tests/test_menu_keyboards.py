@@ -178,6 +178,32 @@ def test_game_keyboard_renders_status_only_potion_prompt_options() -> None:
     assert f"{CallbackData.GAME_PREFIX}prompt:t" in callback_data
 
 
+def test_game_keyboard_renders_status_only_inventory_actions() -> None:
+    response = GameResponse(
+        state={},
+        screen="Inventory\nGold: $144\na.   a magic potion",
+        status={
+            "screen_type": "modal",
+            "pending_prompt": {
+                "question": "Choose an inventory action.",
+                "kind": "inventory",
+                "options": [
+                    {"key": "quaff:a", "label": "Quaff a. magic potion"},
+                    {"key": "drop:a", "label": "Drop a. magic potion"},
+                ],
+            },
+        },
+    )
+
+    texts = _button_texts(game_keyboard(response))
+    callback_data = _button_callback_data(game_keyboard(response))
+
+    assert "Quaff a. magic potion" in texts
+    assert "Drop a. magic potion" in texts
+    assert f"{CallbackData.GAME_PREFIX}inv:quaff:a" in callback_data
+    assert f"{CallbackData.GAME_PREFIX}inv:drop:a" in callback_data
+
+
 def test_game_keyboard_for_modal_prompt_omits_movement_controls() -> None:
     response = GameResponse(
         state={},
