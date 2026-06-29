@@ -29,6 +29,7 @@ from tglarn_game.relarn_process import (
     _render_display_lines,
     _should_capture_map_snapshot,
     _should_force_full_redraw,
+    _should_keep_base_save_for_prompt,
     _TerminalCell,
 )
 
@@ -426,6 +427,22 @@ def test_detect_prompt_extracts_spell_picklist_options() -> None:
             {"key": "e", "label": "Charm monster"},
         ],
     }
+
+
+def test_prompt_screens_keep_base_save_instead_of_saving_prompt_process() -> None:
+    spell_lines = [
+        "Cast which spell?",
+        "b.   magic missile Fires a magic arrow at the target",
+        "Up:k/CTRL+p/UP Down:j/CTRL+n/DOWN Select:ENTER",
+    ]
+
+    assert _should_keep_base_save_for_prompt(spell_lines, [b"c"])
+
+    map_lines = [" " * 80 for _ in range(25)]
+    map_lines[15] = " " * 26 + "@" + " " * 53
+    map_lines[17] = "Spells: 1(2) AC:2 WC:0 LV:1 Time:0"
+    map_lines[18] = "HP: 6 (8) STR=8 INT=14 WIS=12"
+    assert not _should_keep_base_save_for_prompt(map_lines, [b"l"])
 
 
 def test_detect_prompt_extracts_dealer_picklist_options() -> None:

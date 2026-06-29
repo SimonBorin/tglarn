@@ -722,6 +722,13 @@ def _execute_relarn_cycle(
         if _should_capture_map_snapshot(display_lines):
             map_snapshot = _capture_map_snapshot(master_fd, terminal, home)
 
+        if _should_keep_base_save_for_prompt(display_lines, keys):
+            return _RelarnCycleResult(
+                display_lines,
+                display_cells=display_snapshot.cells,
+                map_snapshot=map_snapshot,
+            )
+
         _close_transient_screens_before_save(
             master_fd,
             terminal,
@@ -779,6 +786,10 @@ def _read_process_to_exit(
             _read_once(fd, terminal, 0.0)
             return
     raise TimeoutError("Timed out waiting for ReLarn to exit after save command")
+
+
+def _should_keep_base_save_for_prompt(lines: list[str], keys: list[bytes]) -> bool:
+    return bool(keys) and _detect_prompt(lines) is not None
 
 
 def _close_transient_screens_before_save(
