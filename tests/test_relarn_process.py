@@ -487,6 +487,33 @@ def test_detect_prompt_extracts_dealer_picklist_options() -> None:
     }
 
 
+def test_detect_prompt_extracts_dnd_store_picklist_options() -> None:
+    prompt = _detect_prompt(
+        [
+            "Welcome to the Larn Thrift Shoppe.",
+            "\"Feel free to browse to your heart's content.\"",
+            "You break 'em, you bought 'em.",
+            "Your gold: $144",
+            "     a spear                                  $30",
+            "     leather armor                            $50",
+            "     a magic potion                           $90",
+            "Up:k/CTRL+p/UP Down:j/CTRL+n/DOWN Select:ENTER Quit:ESC/CTRL+x",
+            "To select an individual item, type the corresponding",
+            "key; CTRL+v escapes.",
+        ]
+    )
+
+    assert prompt == {
+        "question": "Choose an item.",
+        "kind": "indexed_picklist",
+        "options": [
+            {"key": "0", "label": "a spear (30 gold)"},
+            {"key": "1", "label": "leather armor (50 gold)"},
+            {"key": "2", "label": "a magic potion (90 gold)"},
+        ],
+    }
+
+
 def test_picklist_prompt_answers_require_enter() -> None:
     prompt = _detect_prompt(
         [
@@ -499,6 +526,37 @@ def test_picklist_prompt_answers_require_enter() -> None:
     assert prompt is not None
     assert _prompt_requires_enter(prompt)
     assert _prompt_answer_from_command("prompt:a", prompt) == "a"
+
+
+def test_detect_prompt_extracts_bank_menu_options() -> None:
+    prompt = _detect_prompt(
+        [
+            "Welcome to the First National Bank of Larn.",
+            "\"Bank of Opportunism.\"",
+            "(c)heck your balance",
+            "(d)eposit money",
+            "(w)ithdraw money",
+            "(s)ell a gem or artifact",
+            "",
+            "(e)xit",
+            "Up:k/CTRL+p/UP Down:j/CTRL+n/DOWN Select:ENTER",
+            "Quit:ESC/CTRL+x",
+        ]
+    )
+
+    assert prompt == {
+        "question": "Choose a bank action.",
+        "kind": "picklist",
+        "options": [
+            {"key": "c", "label": "Check your balance"},
+            {"key": "d", "label": "Deposit money"},
+            {"key": "w", "label": "Withdraw money"},
+            {"key": "s", "label": "Sell a gem or artifact"},
+            {"key": "e", "label": "Exit"},
+        ],
+    }
+    assert _prompt_requires_enter(prompt)
+    assert _prompt_answer_keys("c", prompt) == [b"c", b"\n"]
 
 
 def test_indexed_picklist_prompt_answers_move_to_selected_row() -> None:
