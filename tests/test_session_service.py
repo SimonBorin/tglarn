@@ -1,3 +1,5 @@
+import asyncio
+from copy import deepcopy
 from typing import Any
 
 import pytest
@@ -52,6 +54,32 @@ class CapturingApplyAdapter:
         return GameResponse(
             state=state or {},
             screen="answered",
+            status={"map_view": map_view},
+        )
+
+
+class AccumulatingApplyAdapter:
+    def __init__(self) -> None:
+        self.applied_states: list[dict[str, Any]] = []
+
+    def start(self, state: dict[str, Any] | None = None, map_view: str = "wide") -> GameResponse:
+        return GameResponse(state=state or {}, screen="screen", status={"map_view": map_view})
+
+    def restart(self, map_view: str = "wide") -> GameResponse:
+        return self.start({}, map_view)
+
+    def apply_command(
+        self,
+        state: dict[str, Any] | None,
+        command: str,
+        map_view: str = "wide",
+    ) -> GameResponse:
+        current = deepcopy(state or {})
+        self.applied_states.append(current)
+        commands = [*current.get("commands", []), command]
+        return GameResponse(
+            state={"adapter": "captured", "commands": commands},
+            screen="screen",
             status={"map_view": map_view},
         )
 
@@ -148,6 +176,42 @@ class FakeSessionStore:
         self.session["last_log"] = log
         self.session["last_status"] = status
         return self.session
+
+
+class CopyingSessionStore(FakeSessionStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ensure_count = 0
+        self.session = {
+            "telegram_user_id": 1001,
+            "map_view": "wide",
+            "engine_state": {"adapter": "captured", "commands": []},
+        }
+
+    async def ensure_session(
+        self,
+        telegram_user_id: int,
+        default_map_view: str,
+        username: str | None = None,
+        display_name: str | None = None,
+    ) -> dict[str, Any]:
+        self.ensure_count += 1
+        await asyncio.sleep(0)
+        return deepcopy(self.session)
+
+    async def save_game_response(
+        self,
+        telegram_user_id: int,
+        default_map_view: str,
+        engine_state: dict[str, Any],
+        screen: str,
+        log: list[str],
+        status: dict[str, Any],
+        input_text: str | None = None,
+    ) -> dict[str, Any]:
+        await asyncio.sleep(0)
+        self.session["engine_state"] = deepcopy(engine_state)
+        return deepcopy(self.session)
 
 
 @pytest.mark.asyncio
@@ -310,6 +374,56 @@ async def test_service_applies_command_and_persists_state() -> None:
     assert response.state["turn"] == 1
     assert store.session["engine_state"] == response.state
     assert store.calls[-1][1]["input_text"] == "east"
+
+
+@pytest.mark.asyncio
+async def test_service_serializes_commands_for_one_player_actor() -> None:
+    store = CopyingSessionStore()
+    adapter = AccumulatingApplyAdapter()
+    service = GameSessionService(
+        store=store,
+        game_adapter=adapter,
+        default_map_view="wide",
+    )
+
+    await asyncio.gather(
+        service.apply_command(1001, "east"),
+        service.apply_command(1001, "west"),
+    )
+
+    assert store.session["engine_state"]["commands"] == ["east", "west"]
+    assert adapter.applied_states == [
+        {"adapter": "captured", "commands": []},
+        {"adapter": "captured", "commands": ["east"]},
+    ]
+    assert store.ensure_count == 1
+
+
+@pytest.mark.asyncio
+async def test_service_reloads_session_after_actor_ttl_expires() -> None:
+    current_time = 1000.0
+
+    def clock() -> float:
+        return current_time
+
+    store = CopyingSessionStore()
+    service = GameSessionService(
+        store=store,
+        game_adapter=AccumulatingApplyAdapter(),
+        default_map_view="wide",
+        active_session_ttl_seconds=180.0,
+        _clock=clock,
+    )
+
+    await service.apply_command(1001, "east")
+    await service.apply_command(1001, "west")
+    assert store.ensure_count == 1
+
+    current_time += 181.0
+    await service.apply_command(1001, "north")
+
+    assert store.ensure_count == 2
+    assert store.session["engine_state"]["commands"] == ["east", "west", "north"]
 
 
 @pytest.mark.asyncio

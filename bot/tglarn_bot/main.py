@@ -36,6 +36,7 @@ async def main() -> None:
         store=store,
         game_adapter=_build_game_adapter(settings),
         default_map_view=settings.default_map_view,
+        active_session_ttl_seconds=settings.active_session_ttl_seconds,
     )
 
     register_handlers(dispatcher, settings, session_service)
@@ -50,6 +51,7 @@ async def main() -> None:
         await bot.delete_webhook(drop_pending_updates=True)
         await dispatcher.start_polling(bot)
     finally:
+        await session_service.close()
         await store.close()
         await bot.session.close()
 
