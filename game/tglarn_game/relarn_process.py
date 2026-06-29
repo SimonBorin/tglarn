@@ -63,8 +63,9 @@ _INVENTORY_ACTION_COMMAND_PREFIX = "inv:"
 _INVENTORY_ITEM_COMMAND_PREFIX = "invitem:"
 _PICKLIST_COMMAND_PREFIX = "pick:"
 _STORE_PICKLIST_OPTION_RE = re.compile(
-    r"^\*?\s*(?P<label>[A-Za-z][A-Za-z' -]*?)\s+(?P<price>\d+)\s+bucks$"
+    r"^\*?\s*(?P<label>.+?)\s+(?:(?P<bucks>\d+)\s+bucks|\$(?P<dollars>\d+))$"
 )
+_MENU_OPTION_RE = re.compile(r"^\s*\(([A-Za-z0-9])\)(.+?)\s*$")
 _INVENTORY_ACTION_KEYS = {
     "drop": b"d",
     "eat": b"e",
@@ -1497,6 +1498,9 @@ def _detect_prompt(lines: list[str]) -> dict[str, Any] | None:
     inventory_prompt = _detect_inventory_prompt(lines)
     if inventory_prompt is not None:
         return inventory_prompt
+    menu_prompt = _detect_parenthesized_menu_prompt(lines)
+    if menu_prompt is not None:
+        return menu_prompt
 
     text = " ".join(line.strip() for line in lines[_CONSOLE_START_ROW:] if line.strip())
     if not text:
@@ -1537,7 +1541,7 @@ def _detect_indexed_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
         for line in lines
         if line.strip() and not _is_modal_ui_hint(line)
     ]
-    if not any("Dealer McDope's Pad" in line for line in nonempty):
+    if not _is_indexed_store_screen(nonempty):
         return None
 
     options: list[dict[str, str]] = []
@@ -1546,11 +1550,14 @@ def _detect_indexed_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
         if match is None:
             continue
         label = " ".join(match.group("label").split())
-        price = match.group("price")
+        if label.lower().startswith("your gold"):
+            continue
+        price = match.group("bucks") or match.group("dollars")
+        unit = "bucks" if match.group("bucks") is not None else "gold"
         options.append(
             {
                 "key": str(len(options)),
-                "label": f"{label} ({price} bucks)",
+                "label": f"{label} ({price} {unit})",
             }
         )
     if not options:
@@ -1560,6 +1567,12 @@ def _detect_indexed_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
         "kind": _PROMPT_KIND_INDEXED_PICKLIST,
         "options": options,
     }
+
+
+def _is_indexed_store_screen(lines: list[str]) -> bool:
+    return any("Dealer McDope's Pad" in line for line in lines) or any(
+        "Larn Thrift Shoppe" in line for line in lines
+    )
 
 
 def _detect_inventory_prompt(lines: list[str]) -> dict[str, Any] | None:
@@ -1578,6 +1591,34 @@ def _detect_inventory_prompt(lines: list[str]) -> dict[str, Any] | None:
     return {
         "question": "Choose an inventory item.",
         "kind": _PROMPT_KIND_INVENTORY,
+        "options": options,
+    }
+
+
+def _detect_parenthesized_menu_prompt(lines: list[str]) -> dict[str, Any] | None:
+    nonempty = [
+        line.strip()
+        for line in lines
+        if line.strip() and not _is_modal_ui_hint(line)
+    ]
+    if not any("Bank of Larn" in line for line in nonempty):
+        return None
+
+    options: list[dict[str, str]] = []
+    for line in nonempty:
+        match = _MENU_OPTION_RE.match(line)
+        if match is None:
+            continue
+        key = match.group(1).lower()
+        label = _menu_option_label(key, match.group(2))
+        if key and label and all(existing["key"] != key for existing in options):
+            options.append({"key": key, "label": label})
+
+    if not options:
+        return None
+    return {
+        "question": "Choose a bank action.",
+        "kind": _PROMPT_KIND_PICKLIST,
         "options": options,
     }
 
@@ -1694,6 +1735,11 @@ def _picklist_option_label(text: str) -> str:
     if not cleaned_label:
         return ""
     return cleaned_label[:1].upper() + cleaned_label[1:]
+
+
+def _menu_option_label(key: str, text: str) -> str:
+    cleaned = " ".join(f"{key}{text}".split())
+    return cleaned[:1].upper() + cleaned[1:] if cleaned else key.upper()
 
 
 def _prompt_options(question: str) -> list[dict[str, str]]:
