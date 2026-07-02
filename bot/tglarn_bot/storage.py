@@ -10,6 +10,7 @@ from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.asynchronous.database import AsyncDatabase
 
 from .config import MapView
+from .errors import SessionConflictError
 
 
 class MongoSessionStore:
@@ -101,7 +102,7 @@ class MongoSessionStore:
                     "created_at": now,
                     "map_view": default_map_view,
                 },
-                "$inc": {"run_number": 1},
+                "$inc": {"run_number": 1, "state_version": 1},
             },
             upsert=True,
             return_document=ReturnDocument.AFTER,
@@ -158,6 +159,7 @@ class MongoSessionStore:
         self,
         telegram_user_id: int,
         default_map_view: MapView,
+        expected_state_version: int,
         engine_state: dict[str, Any],
         screen: str,
         log: list[str],
@@ -166,7 +168,7 @@ class MongoSessionStore:
     ) -> dict[str, Any]:
         now = _utcnow()
         session = await self._sessions.find_one_and_update(
-            {"telegram_user_id": telegram_user_id},
+            _versioned_session_filter(telegram_user_id, expected_state_version),
             {
                 "$set": {
                     "status": "active",
@@ -176,11 +178,14 @@ class MongoSessionStore:
                     "last_status": status,
                     "updated_at": now,
                 },
+                "$inc": {"state_version": 1},
             },
             return_document=ReturnDocument.AFTER,
         )
         if session is None:
-            raise RuntimeError(f"Session for Telegram user {telegram_user_id} was not found")
+            raise SessionConflictError(
+                f"Session state changed for Telegram user {telegram_user_id}"
+            )
         if input_text is not None:
             await self._turns.insert_one(
                 {
@@ -206,6 +211,7 @@ def _new_session_fields(
         "created_at": created_at,
         "status": "active",
         "run_number": 1,
+        "state_version": 0,
         "map_view": default_map_view,
         "engine_state": {},
         "last_screen": None,
@@ -221,3 +227,18 @@ def _new_session_fields(
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def _versioned_session_filter(
+    telegram_user_id: int,
+    expected_state_version: int,
+) -> dict[str, Any]:
+    filter_query: dict[str, Any] = {"telegram_user_id": telegram_user_id}
+    if expected_state_version == 0:
+        filter_query["$or"] = [
+            {"state_version": 0},
+            {"state_version": {"$exists": False}},
+        ]
+        return filter_query
+    filter_query["state_version"] = expected_state_version
+    return filter_query

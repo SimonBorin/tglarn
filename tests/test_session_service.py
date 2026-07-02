@@ -3,6 +3,7 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
+from tglarn_bot.errors import SessionConflictError
 from tglarn_bot.services import GameSessionService
 from tglarn_game import GameResponse, PlaceholderGameAdapter
 
@@ -84,9 +85,25 @@ class AccumulatingApplyAdapter:
         )
 
 
+class FailingAdapter:
+    def start(self, state: dict[str, Any] | None = None, map_view: str = "wide") -> GameResponse:
+        raise RuntimeError("boom")
+
+    def restart(self, map_view: str = "wide") -> GameResponse:
+        raise RuntimeError("boom")
+
+    def apply_command(
+        self,
+        state: dict[str, Any] | None,
+        command: str,
+        map_view: str = "wide",
+    ) -> GameResponse:
+        raise RuntimeError("boom")
+
+
 class FakeSessionStore:
     def __init__(self) -> None:
-        self.session: dict[str, Any] = {"engine_state": {}}
+        self.session: dict[str, Any] = {"engine_state": {}, "state_version": 0}
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
     async def ensure_session(
@@ -105,6 +122,7 @@ class FakeSessionStore:
         self.calls.append(("ensure_session", payload))
         self.session.setdefault("telegram_user_id", telegram_user_id)
         self.session.setdefault("map_view", default_map_view)
+        self.session.setdefault("state_version", 0)
         return self.session
 
     async def restart_session(
@@ -117,7 +135,11 @@ class FakeSessionStore:
             "default_map_view": default_map_view,
         }
         self.calls.append(("restart_session", payload))
-        self.session = {"telegram_user_id": telegram_user_id, "engine_state": {}}
+        self.session = {
+            "telegram_user_id": telegram_user_id,
+            "engine_state": {},
+            "state_version": self.session.get("state_version", 0) + 1,
+        }
         return self.session
 
     async def set_map_view(
@@ -155,6 +177,7 @@ class FakeSessionStore:
         self,
         telegram_user_id: int,
         default_map_view: str,
+        expected_state_version: int,
         engine_state: dict[str, Any],
         screen: str,
         log: list[str],
@@ -164,6 +187,7 @@ class FakeSessionStore:
         payload = {
             "telegram_user_id": telegram_user_id,
             "default_map_view": default_map_view,
+            "expected_state_version": expected_state_version,
             "engine_state": engine_state,
             "screen": screen,
             "log": log,
@@ -171,10 +195,13 @@ class FakeSessionStore:
             "input_text": input_text,
         }
         self.calls.append(("save_game_response", payload))
+        if self.session.get("state_version", 0) != expected_state_version:
+            raise SessionConflictError("stale write")
         self.session["engine_state"] = engine_state
         self.session["last_screen"] = screen
         self.session["last_log"] = log
         self.session["last_status"] = status
+        self.session["state_version"] = expected_state_version + 1
         return self.session
 
 
@@ -185,6 +212,7 @@ class CopyingSessionStore(FakeSessionStore):
         self.session = {
             "telegram_user_id": 1001,
             "map_view": "wide",
+            "state_version": 0,
             "engine_state": {"adapter": "captured", "commands": []},
         }
 
@@ -203,6 +231,7 @@ class CopyingSessionStore(FakeSessionStore):
         self,
         telegram_user_id: int,
         default_map_view: str,
+        expected_state_version: int,
         engine_state: dict[str, Any],
         screen: str,
         log: list[str],
@@ -210,8 +239,36 @@ class CopyingSessionStore(FakeSessionStore):
         input_text: str | None = None,
     ) -> dict[str, Any]:
         await asyncio.sleep(0)
+        if self.session.get("state_version", 0) != expected_state_version:
+            raise SessionConflictError("stale write")
         self.session["engine_state"] = deepcopy(engine_state)
+        self.session["state_version"] = expected_state_version + 1
         return deepcopy(self.session)
+
+
+class ConflictingSessionStore(FakeSessionStore):
+    async def save_game_response(
+        self,
+        telegram_user_id: int,
+        default_map_view: str,
+        expected_state_version: int,
+        engine_state: dict[str, Any],
+        screen: str,
+        log: list[str],
+        status: dict[str, Any],
+        input_text: str | None = None,
+    ) -> dict[str, Any]:
+        self.calls.append(
+            (
+                "save_game_response",
+                {
+                    "telegram_user_id": telegram_user_id,
+                    "expected_state_version": expected_state_version,
+                    "input_text": input_text,
+                },
+            )
+        )
+        raise SessionConflictError("stale write")
 
 
 @pytest.mark.asyncio
@@ -374,6 +431,61 @@ async def test_service_applies_command_and_persists_state() -> None:
     assert response.state["turn"] == 1
     assert store.session["engine_state"] == response.state
     assert store.calls[-1][1]["input_text"] == "east"
+    assert store.calls[-1][1]["expected_state_version"] == 0
+    assert store.session["state_version"] == 1
+
+
+@pytest.mark.asyncio
+async def test_service_returns_safe_response_when_adapter_fails() -> None:
+    store = FakeSessionStore()
+    store.session.update(
+        {
+            "engine_state": {"adapter": "relarn_process", "save_blob_b64": "saved"},
+            "last_screen": "previous screen",
+            "last_status": {"pending_prompt": {"kind": "choice"}},
+        }
+    )
+    service = GameSessionService(
+        store=store,
+        game_adapter=FailingAdapter(),
+        default_map_view="wide",
+    )
+
+    response = await service.apply_command(1001, "east")
+
+    assert response.state == {"adapter": "relarn_process", "save_blob_b64": "saved"}
+    assert response.screen == "previous screen"
+    assert response.log == ["The game engine encountered an error. State was not advanced."]
+    assert response.status["adapter_error"] is True
+    assert response.status["pending_prompt"] == {"kind": "choice"}
+    assert [call[0] for call in store.calls] == ["ensure_session"]
+
+
+@pytest.mark.asyncio
+async def test_service_returns_safe_response_on_optimistic_lock_conflict() -> None:
+    store = ConflictingSessionStore()
+    store.session.update(
+        {
+            "engine_state": {"adapter": "captured", "commands": []},
+            "last_screen": "current screen",
+            "last_status": {"screen_type": "map"},
+        }
+    )
+    service = GameSessionService(
+        store=store,
+        game_adapter=AccumulatingApplyAdapter(),
+        default_map_view="wide",
+    )
+
+    response = await service.apply_command(1001, "east")
+
+    assert response.state == {"adapter": "captured", "commands": []}
+    assert response.screen == "current screen"
+    assert response.log == [
+        "The game state changed before this action completed. Use the latest game screen."
+    ]
+    assert response.status["session_conflict"] is True
+    assert store.session["engine_state"] == {"adapter": "captured", "commands": []}
 
 
 @pytest.mark.asyncio
@@ -473,3 +585,18 @@ async def test_service_remembers_active_game_message() -> None:
         "set_active_game_message",
         {"telegram_user_id": 1001, "chat_id": 2002, "message_id": 3003},
     )
+
+
+@pytest.mark.asyncio
+async def test_service_detects_stale_active_game_message() -> None:
+    store = FakeSessionStore()
+    store.session["active_game_chat_id"] = 2002
+    store.session["active_game_message_id"] = 3003
+    service = GameSessionService(
+        store=store,
+        game_adapter=PlaceholderGameAdapter(),
+        default_map_view="wide",
+    )
+
+    assert await service.active_game_message_matches(1001, 2002, 3003)
+    assert not await service.active_game_message_matches(1001, 2002, 3004)

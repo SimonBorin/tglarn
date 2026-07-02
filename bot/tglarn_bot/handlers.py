@@ -313,11 +313,26 @@ def register_handlers(
 
     @router.callback_query(F.data.startswith(CallbackData.GAME_PREFIX))
     async def game_action_callback(callback: CallbackQuery) -> None:
-        await _answer_callback(callback)
         telegram_user_id = _telegram_user_id(callback)
         command = _extract_game_command(callback.data)
         if telegram_user_id is None or command is None:
             return
+        callback_message = callback.message
+        if callback_message is not None:
+            chat_id = getattr(getattr(callback_message, "chat", None), "id", None)
+            message_id = getattr(callback_message, "message_id", None)
+            if isinstance(chat_id, int) and isinstance(message_id, int):
+                if not await session_service.active_game_message_matches(
+                    telegram_user_id,
+                    chat_id,
+                    message_id,
+                ):
+                    await _answer_callback(
+                        callback,
+                        "This game screen is out of date. Use the latest game screen.",
+                    )
+                    return
+        await _answer_callback(callback)
         response = await session_service.apply_command(telegram_user_id, command)
         if response.status.get("game_over"):
             animations.start(
@@ -552,9 +567,12 @@ def _cancel_message_animation(message: Message, animations: "_AnimationManager |
         animations.cancel(message.from_user.id)
 
 
-async def _answer_callback(callback: CallbackQuery) -> None:
+async def _answer_callback(callback: CallbackQuery, text: str | None = None) -> None:
     with contextlib.suppress(TelegramNetworkError):
-        await callback.answer()
+        if text is None:
+            await callback.answer()
+        else:
+            await callback.answer(text)
 
 
 async def _answer_game_response(

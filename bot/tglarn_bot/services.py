@@ -1,6 +1,7 @@
 """Application services used by Telegram handlers."""
 
 import asyncio
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -10,8 +11,14 @@ from tglarn_game import GameResponse
 from tglarn_game.models import GameAdapter
 
 from .config import MapView
+from .errors import SessionConflictError
 
 _DEFAULT_ACTIVE_SESSION_TTL_SECONDS = 180.0
+_ENGINE_ERROR_MESSAGE = "The game engine encountered an error. State was not advanced."
+_SESSION_CONFLICT_MESSAGE = (
+    "The game state changed before this action completed. Use the latest game screen."
+)
+logger = logging.getLogger(__name__)
 _T = TypeVar("_T")
 
 
@@ -48,6 +55,7 @@ class SessionStore(Protocol):
         self,
         telegram_user_id: int,
         default_map_view: MapView,
+        expected_state_version: int,
         engine_state: dict[str, Any],
         screen: str,
         log: list[str],
@@ -76,6 +84,11 @@ class GameSessionService:
     default_map_view: MapView
     active_session_ttl_seconds: float = _DEFAULT_ACTIVE_SESSION_TTL_SECONDS
     _actors: dict[int, _PlayerActor] = field(default_factory=dict, init=False, repr=False)
+    _adapter_slots: asyncio.Semaphore = field(
+        default_factory=lambda: asyncio.Semaphore(4),
+        init=False,
+        repr=False,
+    )
     _clock: Callable[[], float] = field(default=time.monotonic, repr=False)
 
     async def ensure_session(
@@ -124,9 +137,23 @@ class GameSessionService:
             display_name=display_name,
         )
         map_view = self._session_map_view(session)
-        response = self.game_adapter.start(_session_engine_state(session), map_view=map_view)
-        await self._save_game_response(actor, telegram_user_id, response, "resume")
-        return response
+        try:
+            response = await self._run_adapter_call(
+                self.game_adapter.start,
+                _session_engine_state(session),
+                map_view=map_view,
+            )
+        except Exception:
+            logger.exception("Game adapter failed while starting a session")
+            return _adapter_error_response(session, map_view)
+        return await self._save_or_conflict_response(
+            actor,
+            telegram_user_id,
+            session,
+            response,
+            "resume",
+            map_view,
+        )
 
     async def needs_character_setup(
         self,
@@ -188,10 +215,18 @@ class GameSessionService:
                 telegram_user_id=telegram_user_id,
                 default_map_view=self.default_map_view,
             )
-            actor.session = session
+        actor.session = session
         map_view = self._session_map_view(session)
         character = _character_state(character_class, gender)
-        response = self.game_adapter.start({"character": character}, map_view=map_view)
+        try:
+            response = await self._run_adapter_call(
+                self.game_adapter.start,
+                {"character": character},
+                map_view=map_view,
+            )
+        except Exception:
+            logger.exception("Game adapter failed while creating a character")
+            return _adapter_error_response(session, map_view)
         response = GameResponse(
             state=response.state,
             screen=response.screen,
@@ -199,13 +234,14 @@ class GameSessionService:
             status=response.status,
             actions=response.actions,
         )
-        await self._save_game_response(
+        return await self._save_or_conflict_response(
             actor,
             telegram_user_id,
+            session,
             response,
             f"new_character:{character['class']}:{character['gender']}",
+            map_view,
         )
-        return response
 
     async def prepare_new_character(self, telegram_user_id: int) -> dict[str, Any]:
         return await self._with_actor(
@@ -238,7 +274,15 @@ class GameSessionService:
     ) -> GameResponse:
         session = await self._ensure_session(actor, telegram_user_id)
         map_view = self._session_map_view(session)
-        return self.game_adapter.start(_session_engine_state(session), map_view=map_view)
+        try:
+            return await self._run_adapter_call(
+                self.game_adapter.start,
+                _session_engine_state(session),
+                map_view=map_view,
+            )
+        except Exception:
+            logger.exception("Game adapter failed while loading current game")
+            return _adapter_error_response(session, map_view)
 
     async def restart_session(self, telegram_user_id: int) -> GameResponse:
         return await self._with_actor(
@@ -257,15 +301,51 @@ class GameSessionService:
         )
         actor.session = session
         map_view = self._session_map_view(session)
-        response = self.game_adapter.restart(map_view=map_view)
-        await self._save_game_response(actor, telegram_user_id, response, "restart")
-        return response
+        try:
+            response = await self._run_adapter_call(self.game_adapter.restart, map_view=map_view)
+        except Exception:
+            logger.exception("Game adapter failed while restarting a session")
+            return _adapter_error_response(session, map_view)
+        return await self._save_or_conflict_response(
+            actor,
+            telegram_user_id,
+            session,
+            response,
+            "restart",
+            map_view,
+        )
 
     async def apply_command(self, telegram_user_id: int, command: str) -> GameResponse:
         return await self._with_actor(
             telegram_user_id,
             lambda actor: self._apply_command(actor, telegram_user_id, command),
         )
+
+    async def active_game_message_matches(
+        self,
+        telegram_user_id: int,
+        chat_id: int,
+        message_id: int,
+    ) -> bool:
+        return await self._with_actor(
+            telegram_user_id,
+            lambda actor: self._active_game_message_matches(
+                actor,
+                telegram_user_id,
+                chat_id,
+                message_id,
+            ),
+        )
+
+    async def _active_game_message_matches(
+        self,
+        actor: _PlayerActor,
+        telegram_user_id: int,
+        chat_id: int,
+        message_id: int,
+    ) -> bool:
+        session = await self._ensure_session(actor, telegram_user_id)
+        return _active_game_message_matches(session, chat_id, message_id)
 
     async def _apply_command(
         self,
@@ -275,13 +355,24 @@ class GameSessionService:
     ) -> GameResponse:
         session = await self._ensure_session(actor, telegram_user_id)
         map_view = self._session_map_view(session)
-        response = self.game_adapter.apply_command(
-            _session_engine_state(session),
+        try:
+            response = await self._run_adapter_call(
+                self.game_adapter.apply_command,
+                _session_engine_state(session),
+                command,
+                map_view=map_view,
+            )
+        except Exception:
+            logger.exception("Game adapter failed while applying command")
+            return _adapter_error_response(session, map_view)
+        return await self._save_or_conflict_response(
+            actor,
+            telegram_user_id,
+            session,
+            response,
             command,
-            map_view=map_view,
+            map_view,
         )
-        await self._save_game_response(actor, telegram_user_id, response, command)
-        return response
 
     async def set_active_game_message(
         self,
@@ -332,7 +423,15 @@ class GameSessionService:
             default_map_view=self.default_map_view,
         )
         actor.session = session
-        response = self.game_adapter.start(_session_engine_state(session), map_view=view)
+        try:
+            response = await self._run_adapter_call(
+                self.game_adapter.start,
+                _session_engine_state(session),
+                map_view=view,
+            )
+        except Exception:
+            logger.exception("Game adapter failed while changing map view")
+            return _adapter_error_response(session, view)
         response = GameResponse(
             state=response.state,
             screen=response.screen,
@@ -340,30 +439,55 @@ class GameSessionService:
             status=response.status,
             actions=response.actions,
         )
-        await self._save_game_response(
+        return await self._save_or_conflict_response(
             actor,
             telegram_user_id,
+            session,
             response,
             f"set_display_size:{view}",
+            view,
         )
-        return response
 
     async def _save_game_response(
         self,
         actor: _PlayerActor,
         telegram_user_id: int,
+        expected_state_version: int,
         response: GameResponse,
         input_text: str,
     ) -> None:
         actor.session = await self.store.save_game_response(
             telegram_user_id=telegram_user_id,
             default_map_view=self.default_map_view,
+            expected_state_version=expected_state_version,
             engine_state=response.state,
             screen=response.screen,
             log=response.log,
             status=response.status,
             input_text=input_text,
         )
+
+    async def _save_or_conflict_response(
+        self,
+        actor: _PlayerActor,
+        telegram_user_id: int,
+        session: dict[str, Any],
+        response: GameResponse,
+        input_text: str,
+        map_view: MapView,
+    ) -> GameResponse:
+        try:
+            await self._save_game_response(
+                actor,
+                telegram_user_id,
+                _session_state_version(session),
+                response,
+                input_text,
+            )
+        except SessionConflictError:
+            logger.info("Rejected stale session write for Telegram user %s", telegram_user_id)
+            return _session_conflict_response(session, map_view)
+        return response
 
     async def close(self) -> None:
         self._actors.clear()
@@ -416,6 +540,15 @@ class GameSessionService:
         for telegram_user_id in expired:
             del self._actors[telegram_user_id]
 
+    async def _run_adapter_call(
+        self,
+        operation: Callable[..., _T],
+        *args: Any,
+        **kwargs: Any,
+    ) -> _T:
+        async with self._adapter_slots:
+            return await asyncio.to_thread(operation, *args, **kwargs)
+
     def _session_map_view(self, session: dict[str, Any]) -> MapView:
         value = session.get("map_view", self.default_map_view)
         if value in {"compact", "normal"}:
@@ -437,6 +570,66 @@ def _engine_state_has_started_game(state: Any) -> bool:
 
 def _session_engine_state(session: dict[str, Any]) -> Any:
     return session.get("engine_state")
+
+
+def _session_state_version(session: dict[str, Any]) -> int:
+    value = session.get("state_version", 0)
+    return value if isinstance(value, int) and value >= 0 else 0
+
+
+def _adapter_error_response(session: dict[str, Any], map_view: MapView) -> GameResponse:
+    return _safe_session_response(
+        session,
+        map_view,
+        _ENGINE_ERROR_MESSAGE,
+        {"adapter_error": True},
+    )
+
+
+def _session_conflict_response(session: dict[str, Any], map_view: MapView) -> GameResponse:
+    return _safe_session_response(
+        session,
+        map_view,
+        _SESSION_CONFLICT_MESSAGE,
+        {"session_conflict": True},
+    )
+
+
+def _safe_session_response(
+    session: dict[str, Any],
+    map_view: MapView,
+    message: str,
+    extra_status: dict[str, Any],
+) -> GameResponse:
+    state = session.get("engine_state")
+    if not isinstance(state, dict):
+        state = {}
+    status = session.get("last_status")
+    if not isinstance(status, dict):
+        status = {}
+    screen = session.get("last_screen")
+    if not isinstance(screen, str) or not screen:
+        screen = "Game engine error."
+    return GameResponse(
+        state=state,
+        screen=screen,
+        log=[message],
+        status=status | {"map_view": map_view, **extra_status},
+    )
+
+
+def _active_game_message_matches(
+    session: dict[str, Any],
+    chat_id: int,
+    message_id: int,
+) -> bool:
+    active_message_id = session.get("active_game_message_id")
+    if active_message_id is None:
+        return True
+    active_chat_id = session.get("active_game_chat_id")
+    return active_message_id == message_id and (
+        active_chat_id is None or active_chat_id == chat_id
+    )
 
 
 def _character_state(character_class: str, gender: str) -> dict[str, str]:
