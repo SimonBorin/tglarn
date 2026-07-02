@@ -1,20 +1,15 @@
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.12-slim-bookworm AS builder
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    RELARN_BINARY_PATH=/opt/relarn/lib/relarn/relarn.bin \
-    RELARN_INSTALL_ROOT=/opt/relarn
+ENV PIP_NO_CACHE_DIR=1
 
-WORKDIR /app
+WORKDIR /build
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         gcc \
         libncurses-dev \
         make \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home --shell /usr/sbin/nologin appuser
+    && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md LICENSE.txt ./
 COPY vendor/relarn ./vendor/relarn
@@ -38,8 +33,28 @@ RUN rm -f vendor/relarn/src/relarn.bin vendor/relarn/src/deps.mk vendor/relarn/s
     && cp -R vendor/relarn/data/fonts /opt/relarn/share/relarn/lib/fonts \
     && touch /opt/relarn/var/relarn/Relarn-scoreboard \
     && chmod a+rw /opt/relarn/var/relarn/Relarn-scoreboard \
-    && python -m pip install --upgrade pip \
-    && python -m pip install .
+    && python -m pip wheel --wheel-dir /tmp/wheels .
+
+FROM python:3.12-slim-bookworm AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    RELARN_BINARY_PATH=/opt/relarn/lib/relarn/relarn.bin \
+    RELARN_INSTALL_ROOT=/opt/relarn
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libncurses6 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --shell /usr/sbin/nologin appuser
+
+COPY --from=builder /opt/relarn /opt/relarn
+COPY --from=builder /tmp/wheels /tmp/wheels
+
+RUN python -m pip install --no-index --find-links /tmp/wheels tglarn \
+    && rm -rf /tmp/wheels
 
 USER appuser
 
