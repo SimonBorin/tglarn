@@ -7,6 +7,8 @@
 
 The project was built through a collaborative AI-native loop. Gemini served as the system analyst, converting gameplay failures and architectural risks into structured prompts. Codex served as the core programmer, reading the repository, editing code, refactoring infrastructure, and expanding tests. The User acted as the final architectural filter, QA reviewer, product lead, and scope owner.
 
+The public playable build is available on Telegram at [@tglarnbot](https://t.me/tglarnbot).
+
 The working loop was:
 
 1. The User identified a gameplay or infrastructure gap.
@@ -39,6 +41,8 @@ The most surprising result was the high accuracy of Codex when managing low-leve
 Another discovery was that visual fidelity required image rendering. Telegram text formatting is not a terminal emulator. Pillow became essential because it converted ReLarn's colorful ANSI/curses output into stable images that preserve the intended retro layout across clients.
 
 The team also discovered that the original C game contains more interactive states than expected. Stores and banks are not just menus; they are nested protocols with confirmations, numeric prompts, modal result screens, cancellations, and explicit exits.
+
+Late combat testing also exposed a subtle observability issue: the original curses console only shows a short rolling message window, so duplicate same-turn combat events could scroll away before Telegram captured the screen. The fix was not to rebalance combat, but to export a complete per-turn message log from the C `say()` path and surface it in Telegram.
 
 # Estimated Percentage of AI-Generated Code
 

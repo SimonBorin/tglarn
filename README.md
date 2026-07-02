@@ -2,12 +2,20 @@
 
 `tglarn` is a Telegram bot adaptation of the ReLarn/Larn roguelike engine. It wraps the original C game, preserved under `vendor/relarn/`, with a Python Telegram adapter that translates terminal-driven gameplay into direct-chat messages, contextual inline buttons, and rendered game images.
 
+## Play the Live Bot
+
+Play the public Telegram build here: [@tglarnbot](https://t.me/tglarnbot).
+
+Scan this QR code from Telegram or open the handle directly:
+
+![Telegram QR code for @tglarnbot](docs/screenshots/tglarn-bot-qr.png)
+
 The project keeps the legacy engine and the new integration code deliberately separate:
 
 - `vendor/relarn/` contains the upstream C ReLarn source and assets.
 - `game/tglarn_game/` contains the Python game adapter boundary, including the ReLarn subprocess and PTY bridge.
 - `bot/tglarn_bot/` contains aiogram handlers, keyboards, rendering, persistence services, and Telegram-specific UX.
-- `tests/` contains the 136-test suite covering the adapter, keyboards, rendering, process prompts, session service, and error boundaries.
+- `tests/` contains the 140-test suite covering the adapter, keyboards, rendering, process prompts, session service, and error boundaries.
 
 The AI-native team model was explicit:
 
@@ -22,6 +30,10 @@ Larn is a classic roguelike about a parent trying to find a cure for a daughter 
 The game remains turn-based and command-driven. Movement, inventory actions, spellcasting, stores, banks, tax prompts, object interactions, and win/loss conditions are still controlled by the original C engine. The Telegram bot changes the interface, not the rules.
 
 # Screenshots
+
+Live bot QR code:
+
+![Telegram QR code for @tglarnbot](docs/screenshots/tglarn-bot-qr.png)
 
 Rendered dungeon map:
 
@@ -116,7 +128,7 @@ Run linting and the full test suite:
 .venv/bin/python -m pytest
 ```
 
-The repository currently contains 136 tests. They cover menu keyboards, text rendering, Pillow image rendering, placeholder gameplay, ReLarn prompt detection, inventory flows, store invoices, number prompts, stale button rejection, optimistic locking, adapter error boundaries, and session isolation.
+The repository currently contains 140 tests. They cover menu keyboards, text rendering, Pillow image rendering, placeholder gameplay, ReLarn prompt detection, inventory flows, store invoices, number prompts, stale button rejection, optimistic locking, adapter error boundaries, combat log transparency, and session isolation.
 
 # Licensing & Credits
 
