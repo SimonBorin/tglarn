@@ -30,11 +30,13 @@ from tglarn_game.relarn_process import (
     _prompt_requires_enter,
     _read_map_snapshot,
     _render_display_lines,
+    _response_log,
     _should_capture_map_snapshot,
     _should_force_full_redraw,
     _should_keep_base_save_for_prompt,
     _state_save_blob,
     _TerminalCell,
+    _turn_log_lines,
 )
 
 
@@ -1003,3 +1005,35 @@ def test_game_over_log_preserves_death_context_without_continue_prompt() -> None
         "You suffer 5 hit points damage!",
         "Alas, you have died.",
     ]
+
+
+def test_turn_log_preserves_duplicate_combat_messages() -> None:
+    raw_log = "\n".join(
+        [
+            "You missed the hobgoblin.",
+            "The hobgoblin hit you.",
+            "The hobgoblin hit you.",
+            "Alas, you have died.",
+            "Saving . . .",
+        ]
+    )
+
+    assert _turn_log_lines(raw_log) == [
+        "You missed the hobgoblin.",
+        "The hobgoblin hit you.",
+        "The hobgoblin hit you.",
+        "Alas, you have died.",
+    ]
+
+
+def test_map_response_prefers_full_turn_log_over_visible_console_log() -> None:
+    status = {"screen_type": "map"}
+    turn_log = [
+        "You missed the hobgoblin.",
+        "The hobgoblin hit you.",
+        "The hobgoblin hit you.",
+        "Alas, you have died.",
+    ]
+    rendered_log = ["The hobgoblin hit you.", "Alas, you have died."]
+
+    assert _response_log(turn_log, rendered_log, ["fallback"], status) == turn_log

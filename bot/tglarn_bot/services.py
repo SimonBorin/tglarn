@@ -37,6 +37,8 @@ class SessionStore(Protocol):
         default_map_view: MapView,
     ) -> dict[str, Any]: ...
 
+    async def get_session(self, telegram_user_id: int) -> dict[str, Any] | None: ...
+
     async def set_map_view(
         self,
         telegram_user_id: int,
@@ -344,8 +346,24 @@ class GameSessionService:
         chat_id: int,
         message_id: int,
     ) -> bool:
-        session = await self._ensure_session(actor, telegram_user_id)
-        return _active_game_message_matches(session, chat_id, message_id)
+        session = await self.store.get_session(telegram_user_id)
+        if session is None:
+            session = await self._ensure_session(actor, telegram_user_id)
+        else:
+            actor.session = session
+        matches = _active_game_message_matches(session, chat_id, message_id)
+        logger.debug(
+            "Validated active game message for Telegram user %s: "
+            "incoming_chat_id=%s incoming_message_id=%s "
+            "active_chat_id=%s active_message_id=%s matches=%s",
+            telegram_user_id,
+            chat_id,
+            message_id,
+            session.get("active_game_chat_id"),
+            session.get("active_game_message_id"),
+            matches,
+        )
+        return matches
 
     async def _apply_command(
         self,

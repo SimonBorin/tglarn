@@ -2,7 +2,7 @@
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 /* * Modified by Semen Borin for the tglarn Telegram Bot project in 2026.
  * Date of change: July 2, 2026
- * Nature of modification: Adapted terminal input/output handling and state-machine compatibility for async PTY execution.
+ * Nature of modification: Adapted terminal input/output handling, turn-log export, and state-machine compatibility for async PTY execution.
  */
 
 
@@ -18,6 +18,7 @@
 
 #include <curses.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -49,6 +50,7 @@ enum ColorPairs {
 static bool pick_backend(struct PickList *pl, const char *headings[],
                          int hcount, bool *selections, bool multi);
 static void backspace(void);
+static void append_tglarn_turn_log(const char *text);
 
 static struct TextBuffer *ConsoleBuffer = NULL;
 static int ScrollbackPos = 0;
@@ -1545,6 +1547,8 @@ say(const char *fmt, ...) {
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
 
+    append_tglarn_turn_log(buf);
+
     tb_append(ConsoleBuffer, buf);
 
     // If say() was called before UI initialization, we skip the
@@ -1555,6 +1559,23 @@ say(const char *fmt, ...) {
         update_msg(force);
     }// if
 }/* say*/
+
+
+static void
+append_tglarn_turn_log(const char *text) {
+    const char *path = getenv("TGLARN_TURN_LOG_PATH");
+    if (!path || !*path || !text || !*text) {
+        return;
+    }
+
+    FILE *fh = fopen(path, "a");
+    if (!fh) {
+        return;
+    }
+
+    fputs(text, fh);
+    fclose(fh);
+}
 
 // Delete the last character of the last line in the display
 static void

@@ -17,6 +17,8 @@ High-level rules exposed by the wrapper:
 
 The MVP scope is a Telegram direct-chat wrapper for isolated single-player ReLarn sessions. The bot supports many players in parallel, but each player has an independent session document and game state.
 
+The public playable Telegram bot is available at [@tglarnbot](https://t.me/tglarnbot).
+
 In scope:
 
 - Isolated per-user sessions keyed primarily by Telegram user ID, with active Telegram chat and message IDs tracked for UI validation.
@@ -41,6 +43,7 @@ Out of scope:
 - Store active `chat_id` and `message_id` values so stale inline callbacks can be rejected before a game command is executed.
 - Maintain one MongoDB session document per player with `engine_state`, `last_screen`, `last_log`, `last_status`, `map_view`, active message metadata, and `state_version`.
 - Generate dynamic, contextual inline keyboards from `GameResponse.actions` and pending prompt metadata.
+- Expose the production game entry point through the public Telegram handle `@tglarnbot`.
 - Keep inline button labels emoji-free, using labels such as `Cancel`, `Main Menu`, `Confirm sale`, `Decline`, `Finish sale`, and `Exit Store`.
 - Support lettered picklists, indexed picklists, direction prompts, object prompts, inventory action menus, multi-pick sale lists, store invoices, and number prompts.
 - Provide a `numPrompt` path for numeric C prompts such as tax payments, gold drops, bank deposits, and bank withdrawals.
@@ -52,7 +55,7 @@ Out of scope:
 
 # Acceptance Criteria
 
-- All 136+ unit and integration tests pass with `pytest`.
+- All 140 unit and integration tests pass with `pytest`.
 - `ruff check .` passes without lint errors.
 - No blocking synchronous adapter call runs on the main asyncio event loop.
 - Blocking C-engine work is offloaded through bounded worker execution.
@@ -63,3 +66,4 @@ Out of scope:
 - Store buy/sell transactions expose selection, confirmation, cancellation, sale completion, and store exit controls.
 - Numeric prompts support both inline presets and typed numeric fallback.
 - Telegram rendering remains stable across clients by using Pillow-generated images for terminal grid output instead of relying only on Markdown or HTML text layout.
+- Combat and death logs preserve duplicate same-turn messages so hidden multi-hit damage remains visible to the player.

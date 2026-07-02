@@ -1,8 +1,8 @@
 // This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
-/* * Modified by Semen Borin for the tglarn Telegram Bot project in 2026.
- * Date of change: July 2, 2026
- * Nature of modification: Adapted terminal input/output handling and state-machine compatibility for async PTY execution.
+/*
+ * Modified for the tglarn Telegram Bot project in 2026.
+ * Nature of modification: Replaced recursive maze carver with randomized room-first generator and strict flood-fill connectivity validation.
  */
 
 
@@ -36,7 +36,6 @@ static void froom(int n, int itm, int arg);
 static void fillroom(struct Object obj);
 static void sethp(bool firstVisit);
 static void checkban(void);
-static void eat(int xx, int yy);
 
 // State of the game:
 struct World W = {-1};
@@ -373,71 +372,423 @@ newcavelevel () {
 }/* newcavelevel */
 
 
+#define MICRO_ROOM_MIN_COUNT 8
+#define MICRO_ROOM_MAX_COUNT 12
+#define MICRO_ROOM_MIN_SIZE 3
+#define MICRO_ROOM_MAX_SIZE 5
+#define MICRO_ROOM_LAYOUT_ATTEMPTS 64
+#define MICRO_ROOM_PLACEMENT_ATTEMPTS 600
+
+struct MicroRoom {
+    int x;
+    int y;
+    int width;
+    int height;
+    int center_x;
+    int center_y;
+};
+
+struct FloodPoint {
+    int x;
+    int y;
+};
+
+static int
+iabs(int value) {
+    return value < 0 ? -value : value;
+}
+
+static void
+fill_level_with(int lev) {
+    struct Object wallish = lev == 0 ? NULL_OBJ : obj(OWALL, 0);
+
+    for (int y = 0; y < MAXY; y++) {
+        for (int x = 0; x < MAXX; x++) {
+            at(x, y)->obj = wallish;
+            at(x, y)->mon = NULL_MON;
+        }
+    }
+}
+
+static int
+room_right(const struct MicroRoom *room) {
+    return room->x + room->width - 1;
+}
+
+static int
+room_bottom(const struct MicroRoom *room) {
+    return room->y + room->height - 1;
+}
+
+static bool
+rooms_overlap_with_padding(const struct MicroRoom *a,
+                           const struct MicroRoom *b) {
+    return !(room_right(a) + 1 < b->x ||
+             room_right(b) + 1 < a->x ||
+             room_bottom(a) + 1 < b->y ||
+             room_bottom(b) + 1 < a->y);
+}
+
+static bool
+room_fits(const struct MicroRoom rooms[],
+          int room_count,
+          const struct MicroRoom *candidate) {
+    if (candidate->x < 1 || candidate->y < 1) { return false; }
+    if (room_right(candidate) >= MAXX - 1) { return false; }
+    if (room_bottom(candidate) >= MAXY - 1) { return false; }
+
+    for (int i = 0; i < room_count; i++) {
+        if (rooms_overlap_with_padding(&rooms[i], candidate)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void
+carve_cell(int x, int y) {
+    if (!inbounds(x, y)) { return; }
+    at(x, y)->obj = NULL_OBJ;
+    at(x, y)->mon = NULL_MON;
+}
+
+static void
+carve_room(const struct MicroRoom *room) {
+    for (int y = room->y; y <= room_bottom(room); y++) {
+        for (int x = room->x; x <= room_right(room); x++) {
+            carve_cell(x, y);
+        }
+    }
+}
+
+static void
+carve_hline(int x1, int x2, int y) {
+    int from = min(x1, x2);
+    int to = max(x1, x2);
+
+    for (int x = from; x <= to; x++) {
+        carve_cell(x, y);
+    }
+}
+
+static void
+carve_vline(int x, int y1, int y2) {
+    int from = min(y1, y2);
+    int to = max(y1, y2);
+
+    for (int y = from; y <= to; y++) {
+        carve_cell(x, y);
+    }
+}
+
+static void
+carve_l_path(int from_x, int from_y, int to_x, int to_y) {
+    carve_hline(from_x, to_x, from_y);
+    carve_vline(to_x, from_y, to_y);
+}
+
+static bool
+cell_is_accessible_for_validation(int x, int y) {
+    if (!inbounds(x, y)) { return false; }
+
+    return at(x, y)->obj.type != OWALL;
+}
+
+static void
+flood_fill_from(int start_x, int start_y, bool visited[MAXX][MAXY]) {
+    struct FloodPoint stack[MAXX * MAXY];
+    int stack_count = 0;
+
+    if (!cell_is_accessible_for_validation(start_x, start_y)) { return; }
+
+    visited[start_x][start_y] = true;
+    stack[stack_count++] = (struct FloodPoint){start_x, start_y};
+
+    while (stack_count > 0) {
+        struct FloodPoint current = stack[--stack_count];
+        static const int dx[] = {1, -1, 0, 0};
+        static const int dy[] = {0, 0, 1, -1};
+
+        for (int i = 0; i < 4; i++) {
+            int nx = current.x + dx[i];
+            int ny = current.y + dy[i];
+
+            if (!cell_is_accessible_for_validation(nx, ny)) { continue; }
+            if (visited[nx][ny]) { continue; }
+
+            visited[nx][ny] = true;
+            stack[stack_count++] = (struct FloodPoint){nx, ny};
+        }
+    }
+}
+
+static bool
+find_first_accessible_tile(int *out_x, int *out_y) {
+    for (int y = 0; y < MAXY; y++) {
+        for (int x = 0; x < MAXX; x++) {
+            if (cell_is_accessible_for_validation(x, y)) {
+                *out_x = x;
+                *out_y = y;
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+static bool
+find_first_unreachable_accessible_tile(bool visited[MAXX][MAXY],
+                                       int *out_x,
+                                       int *out_y) {
+    for (int y = 0; y < MAXY; y++) {
+        for (int x = 0; x < MAXX; x++) {
+            if (cell_is_accessible_for_validation(x, y) && !visited[x][y]) {
+                *out_x = x;
+                *out_y = y;
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+static bool
+find_nearest_visited_tile(bool visited[MAXX][MAXY],
+                          int from_x,
+                          int from_y,
+                          int *out_x,
+                          int *out_y) {
+    int best_distance = MAXX + MAXY;
+    bool found = false;
+
+    for (int y = 0; y < MAXY; y++) {
+        for (int x = 0; x < MAXX; x++) {
+            if (!visited[x][y]) { continue; }
+
+            int distance = iabs(from_x - x) + iabs(from_y - y);
+            if (distance < best_distance) {
+                best_distance = distance;
+                *out_x = x;
+                *out_y = y;
+                found = true;
+            }
+        }
+    }
+
+    return found;
+}
+
+static bool
+connect_all_accessible_tiles_from(int start_x, int start_y) {
+    for (int pass = 0; pass < MAXX * MAXY; pass++) {
+        bool visited[MAXX][MAXY] = {{false}};
+        int isolated_x = 0;
+        int isolated_y = 0;
+        int target_x = 0;
+        int target_y = 0;
+
+        flood_fill_from(start_x, start_y, visited);
+
+        if (!find_first_unreachable_accessible_tile(visited,
+                                                   &isolated_x,
+                                                   &isolated_y)) {
+            return true;
+        }
+
+        if (!find_nearest_visited_tile(visited,
+                                       isolated_x,
+                                       isolated_y,
+                                       &target_x,
+                                       &target_y)) {
+            return false;
+        }
+
+        carve_l_path(isolated_x, isolated_y, target_x, target_y);
+    }
+
+    return false;
+}
+
+static bool
+connect_all_accessible_tiles(void) {
+    int start_x = 0;
+    int start_y = 0;
+
+    if (!find_first_accessible_tile(&start_x, &start_y)) {
+        return false;
+    }
+
+    return connect_all_accessible_tiles_from(start_x, start_y);
+}
+
+static void
+sort_rooms_by_center_x(struct MicroRoom rooms[], int room_count) {
+    for (int i = 1; i < room_count; i++) {
+        struct MicroRoom current = rooms[i];
+        int j = i - 1;
+
+        while (j >= 0 && rooms[j].center_x > current.center_x) {
+            rooms[j + 1] = rooms[j];
+            j--;
+        }
+
+        rooms[j + 1] = current;
+    }
+}
+
+static bool
+flood_fill_validate(const struct MicroRoom rooms[], int room_count) {
+    bool visited[MAXX][MAXY] = {{false}};
+
+    if (room_count <= 0) { return false; }
+
+    int start_x = rooms[0].center_x;
+    int start_y = rooms[0].center_y;
+    if (!cell_is_accessible_for_validation(start_x, start_y)) {
+        return false;
+    }
+
+    if (!connect_all_accessible_tiles_from(start_x, start_y)) {
+        return false;
+    }
+
+    flood_fill_from(start_x, start_y, visited);
+
+    for (int i = 0; i < room_count; i++) {
+        if (!visited[rooms[i].center_x][rooms[i].center_y]) {
+            return false;
+        }
+    }
+
+    for (int y = 0; y < MAXY; y++) {
+        for (int x = 0; x < MAXX; x++) {
+            if (cell_is_accessible_for_validation(x, y) && !visited[x][y]) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+static void
+connect_cave_exit_access(const struct MicroRoom rooms[], int room_count) {
+    if (room_count <= 0) { return; }
+
+    int access_x = CAVE_EXIT_X;
+    int access_y = CAVE_EXIT_Y - 1;
+    int nearest = 0;
+    int best_distance = MAXX + MAXY;
+
+    for (int i = 0; i < room_count; i++) {
+        int distance = iabs(rooms[i].center_x - access_x) +
+                       iabs(rooms[i].center_y - access_y);
+        if (distance < best_distance) {
+            nearest = i;
+            best_distance = distance;
+        }
+    }
+
+    carve_l_path(rooms[nearest].center_x, rooms[nearest].center_y,
+                 access_x, access_y);
+}
+
+static void
+connect_micro_rooms(const struct MicroRoom rooms[], int room_count, int lev) {
+    for (int i = 0; i < room_count - 1; i++) {
+        carve_l_path(rooms[i].center_x, rooms[i].center_y,
+                     rooms[i + 1].center_x, rooms[i + 1].center_y);
+    }
+
+    if (lev == 1) {
+        connect_cave_exit_access(rooms, room_count);
+    }
+}
+
+static struct MicroRoom
+random_micro_room(void) {
+    struct MicroRoom room;
+
+    room.width = MICRO_ROOM_MIN_SIZE +
+                 rnd(MICRO_ROOM_MAX_SIZE - MICRO_ROOM_MIN_SIZE + 1) - 1;
+    room.height = MICRO_ROOM_MIN_SIZE +
+                  rnd(MICRO_ROOM_MAX_SIZE - MICRO_ROOM_MIN_SIZE + 1) - 1;
+
+    room.x = rnd(MAXX - room.width - 1);
+    room.y = rnd(MAXY - room.height - 1);
+    room.center_x = room.x + room.width / 2;
+    room.center_y = room.y + room.height / 2;
+
+    return room;
+}
+
+static bool
+try_micro_room_layout(int lev) {
+    struct MicroRoom rooms[MICRO_ROOM_MAX_COUNT];
+    int room_count = 0;
+    int target_count = MICRO_ROOM_MIN_COUNT +
+                       rnd(MICRO_ROOM_MAX_COUNT - MICRO_ROOM_MIN_COUNT + 1) -
+                       1;
+
+    fill_level_with(lev);
+
+    for (int attempt = 0;
+         attempt < MICRO_ROOM_PLACEMENT_ATTEMPTS &&
+             room_count < target_count;
+         attempt++) {
+        struct MicroRoom room = random_micro_room();
+
+        if (!room_fits(rooms, room_count, &room)) { continue; }
+
+        rooms[room_count++] = room;
+        carve_room(&room);
+    }
+
+    if (room_count < MICRO_ROOM_MIN_COUNT) {
+        return false;
+    }
+
+    sort_rooms_by_center_x(rooms, room_count);
+    connect_micro_rooms(rooms, room_count, lev);
+    return flood_fill_validate(rooms, room_count);
+}
+
+static void
+make_micro_room_layout(int lev) {
+    if (lev == 0) {
+        fill_level_with(lev);
+        return;
+    }
+
+    for (int attempt = 0; attempt < MICRO_ROOM_LAYOUT_ATTEMPTS; attempt++) {
+        if (try_micro_room_layout(lev)) { return; }
+    }
+
+    FAIL("Unable to create a randomized connected micro-room level.");
+}
+
 /*
- *  makemaze(level)
- *  int level;
+ * Make the caverns for a given level.
  *
- *  subroutine to make the caverns for a given level.  only walls are made.
+ * The Telegram adapter uses a very small visibility radius, so the
+ * procedural fallback layout intentionally favors compact rooms and
+ * short direct corridors instead of large spaces or long maze branches.
  */
 
 void
 makemaze (int lev) {
-    int mx,mxl,mxh,my,myl,myh,tmp2;
-    int z;
-
-    /* fill up maze */
-    {
-        struct Object wallish = lev == 0 ? NULL_OBJ : obj(OWALL, 0);
-        for (int i=0; i<MAXY; i++) {
-            for (int j=0; j<MAXX; j++) {
-                at(j, i)->obj = wallish;
-            }/* for */
-        }/* for */
-    }
-
-    /* don't need to do anymore for level 0 */
-    if (lev==0) { return; }
-
-    eat(1,1);
-
-    /*  now for open spaces -- not on level 15 or V5 */
-    if (lev != DBOTTOM && lev != VBOTTOM) {
-        tmp2 = rnd(3)+3;
-        for (int tmp=0; tmp<tmp2; tmp++) {
-            my = rnd(11)+2;
-            myl = my - rnd(2);
-            myh = my + rnd(2);
-            if (lev <= DBOTTOM) {   /* in dungeon */
-                mx = rnd(44)+5;
-                mxl = mx - rnd(4);
-                mxh = mx + rnd(12)+3;
-                z=0;
-            }
-            else {  /* in volcano */
-                mx = rnd(60)+3;
-                mxl = mx - rnd(2);
-                mxh = mx + rnd(2);
-                z = makemonst(lev);
-            }
-            for (int i = mxl; i < mxh; i++) {
-                for (int j = myl; j < myh; j++) {
-                    at(i, j)->obj = NULL_OBJ;
-                    if (z) { at(i, j)->mon = mk_mon(z); }
-                }/* for */
-            }/* for */
-        }/* for */
-    }/* if */
-
-    if (lev!=DBOTTOM && lev!=VBOTTOM) {
-        my = rnd(MAXY-2);
-        for (int i = 1; i < MAXX-1; i++) {
-            at(i, my)->obj = NULL_OBJ;
-        }
-    }
+    make_micro_room_layout(lev);
 
     /* no treasure rooms above level 5 */
     if (lev>4) {
         treasureroom(lev);
+    }
+
+    if (lev != 0 && !connect_all_accessible_tiles()) {
+        FAIL("Unable to connect all accessible cave tiles.");
     }
 }/* makemaze */
 
@@ -481,19 +832,16 @@ remake_map_keeping_contents() {
     }/* for */
 
     /* Create a new level. */
-    eat(1, 1);
+    make_micro_room_layout(getlevel());
 
     /* Create the exit if this is level 1. */
     if (getlevel() == 1) {
         at(CAVE_EXIT_X, CAVE_EXIT_Y)->obj = obj(OEXIT, 0);
     }
 
-    for (int j = rnd(MAXY - 2), i = 1; i < MAXX - 1; i++) {
-        at(i, j)->obj = obj(ONONE, 0);
-    }
-
     /* put objects back in level */
-    for (; sc >= 0;  --sc) {
+    while (sc > 0) {
+        --sc;
         int tries = 100;
         int x = 1, y = 1;
 
@@ -517,61 +865,10 @@ remake_map_keeping_contents() {
                 at(x, y)->mon = save[sc].i.m;
             }/* if */
         }/* if .. else*/
-    }/* for */
+    }/* while */
 
     free((char *) save);
 }// remake_map_keeping_contents
-
-
-// Maze generation function.  Given a filled-in level, removes
-// material in a random direction before recursing.
-static void
-eat (int xx, int yy) {
-    int dir,try;
-
-    dir = rnd(4);
-    try=2;
-    while (try) {
-        switch(dir) {
-        case 1:
-            if (xx <= 2) break; /*  west    */
-            if ((at(xx-1, yy)->obj.type!=OWALL) || (at(xx-2, yy)->obj.type!=OWALL))
-                break;
-            at(xx-1, yy)->obj = NULL_OBJ;
-            at(xx-2, yy)->obj = NULL_OBJ;
-            eat(xx-2,yy);
-            break;
-        case 2:
-            if (xx >= MAXX-3) break;  /*    east    */
-            if ((at(xx+1, yy)->obj.type!=OWALL) || (at(xx+2, yy)->obj.type!=OWALL))
-                break;
-            at(xx+1, yy)->obj = NULL_OBJ;
-            at(xx+2, yy)->obj = NULL_OBJ;
-            eat(xx+2,yy);
-            break;
-        case 3:
-            if (yy <= 2) break; /*  south   */
-            if ((at(xx, yy-1)->obj.type!=OWALL) || (at(xx, yy-2)->obj.type!=OWALL))
-                break;
-            at(xx, yy-1)->obj = NULL_OBJ;
-            at(xx, yy-2)->obj = NULL_OBJ;
-            eat(xx,yy-2);
-            break;
-        case 4:
-            if (yy >= MAXY-3 ) break;   /*north */
-            if ((at(xx, yy+1)->obj.type!=OWALL) || (at(xx, yy+2)->obj.type!=OWALL))
-                break;
-            at(xx, yy+1)->obj = NULL_OBJ;
-            at(xx, yy+2)->obj = NULL_OBJ;
-            eat(xx,yy+2);
-            break;
-        };
-        if (++dir > 4)  {
-            dir=1;
-            --try;
-        }
-    }/* while */
-}/* eat */
 
 
 /*
