@@ -1,166 +1,130 @@
-# tglarn
+# Project Overview
 
-`tglarn` is a Telegram bot adaptation of ReLarn/Larn for the AI-Native Development Challenge.
+`tglarn` is a Telegram bot adaptation of the ReLarn/Larn roguelike engine. It wraps the original C game, preserved under `vendor/relarn/`, with a Python Telegram adapter that translates terminal-driven gameplay into direct-chat messages, contextual inline buttons, and rendered game images.
 
-The project goal is to make an old text/roguelike game playable through a direct Telegram bot conversation while documenting the full AI-native development lifecycle: requirements, planning, architecture, implementation, validation, documentation, and retrospective.
+The project keeps the legacy engine and the new integration code deliberately separate:
 
-## Game Description
+- `vendor/relarn/` contains the upstream C ReLarn source and assets.
+- `game/tglarn_game/` contains the Python game adapter boundary, including the ReLarn subprocess and PTY bridge.
+- `bot/tglarn_bot/` contains aiogram handlers, keyboards, rendering, persistence services, and Telegram-specific UX.
+- `tests/` contains the 136-test suite covering the adapter, keyboards, rendering, process prompts, session service, and error boundaries.
 
-ReLarn is an old-school roguelike derived from Larn/Ularn. The player explores a dungeon, manages resources, fights monsters, collects items, and tries to progress through the game world using text commands.
+The AI-native team model was explicit:
 
-`tglarn` will wrap that game loop in a Telegram-friendly interface:
+- Product Owner / Tech Lead: User, responsible for product scope, architectural boundaries, feature requests, and final review.
+- Prompt Engineer / AI Strategist: Gemini, responsible for high-level system design, state-machine audit prompts, and implementation planning.
+- Core Developer / Test Architect: Codex, responsible for implementation, concurrency control, PTY lifecycle management, process cleanup, and the automated test suite.
 
-- one direct chat with the bot equals one player session;
-- Telegram messages and inline buttons drive game commands;
-- game state is persisted server-side;
-- the original ReLarn source is kept separate from bot-specific code.
+Pillow is a major architectural choice. The original C engine outputs complex, colorful ANSI terminal grids. Telegram Markdown and HTML rendering are volatile across mobile, desktop, and web clients, and cannot reliably preserve multi-colored monospace terminal layouts. `tglarn` therefore captures terminal state and rasterizes map and modal output into clean PNG images with Pillow, preserving the intended retro visual experience without depending on client-side text layout behavior.
 
-## Screenshots
+# Game Description
 
-Not available yet. Screenshots or short demo captures will be added after the first playable Telegram flow exists.
+Larn is a classic roguelike about a parent trying to find a cure for a daughter who has contracted Dianthroritis. The player explores the caverns of Larn, manages limited resources, fights monsters, collects treasure, interacts with town services, and searches for the Potion of Cure Dianthroritis before time or death ends the run.
 
-## Layout
+The game remains turn-based and command-driven. Movement, inventory actions, spellcasting, stores, banks, tax prompts, object interactions, and win/loss conditions are still controlled by the original C engine. The Telegram bot changes the interface, not the rules.
 
-- `vendor/relarn/` - imported upstream ReLarn source. Keep this close to upstream and avoid bot-specific edits here unless a change must patch the original game.
-- `game/` - game adapter/domain layer. It currently contains a placeholder adapter with the same boundary the future C ReLarn adapter should implement.
-- `bot/tglarn_bot/` - Telegram bot handlers, keyboards, command routing, and session persistence.
-- `deploy/` - Podman, VM, GitLab CI/CD, and deployment files.
-- `docs/` - architecture notes, porting notes, and licensing notes.
-- `tests/` - automated checks.
-- `LICENSES/` - third-party license texts that are also preserved in the imported upstream tree.
+# Screenshots
 
-Imported ReLarn upstream commit:
+Screenshot placeholders for rendered Telegram UI:
 
-```text
-36400b004448620d94a9f432570de9fb077988a5
+```markdown
+![Rendered dungeon map](docs/screenshots/tglarn-map-render.png)
+![Store prompt inline keyboard](docs/screenshots/tglarn-store-prompt.png)
+![Game-over credits screen](docs/screenshots/tglarn-game-over.png)
 ```
 
-## Upstream References
+# Setup & Run Instructions
 
-- ReLarn website: http://relarn.org
-- ReLarn official repository: https://gitlab.com/relarn/relarn
-- Imported source mirror: https://github.com/relarn/relarn
-- Known upstream contributors: `vendor/relarn/AUTHORS.txt`
+Prerequisites:
 
-## Setup
+- Python 3.12+ for the current repository metadata in `pyproject.toml`. The architecture is compatible with Python 3.11+, but the checked-in package metadata currently declares `requires-python = ">=3.12"`.
+- A Telegram bot token from BotFather.
+- MongoDB or a MongoDB-compatible database.
+- Podman for the provided local container workflow.
+- A compiled ReLarn binary when using `GAME_ADAPTER=relarn_process` outside the provided container image.
 
-Current status: project scaffold, imported upstream source, Telegram chat menu, MongoDB-backed session persistence, local container build files, a placeholder game adapter, and an experimental upstream ReLarn process adapter are in place. The default remains the placeholder adapter; set `GAME_ADAPTER=relarn_process` to use the original C game through the pty bridge.
-
-Expected local prerequisites for the implementation phase:
-
-- Python 3.12+ for local bot development
-- Podman for container runtime
-- Telegram bot token from BotFather
-- MongoDB-compatible database; local MVP uses MongoDB in Podman, future deployment may use Amazon DocumentDB
-
-Python and database binaries should not be installed directly on the VM for normal runtime. The bot and supporting services should run in containers.
-
-Create local secrets outside git. `.env.example` is committed as a template, while `.env` is ignored by git. The bot token can also be exported from your shell profile as `TG_LARN_BOT_TOKEN`.
+Create a local virtual environment and install dependencies:
 
 ```bash
-TG_LARN_BOT_TOKEN=replace-with-telegram-bot-token
-MONGO_INITDB_ROOT_USERNAME=tglarn
-MONGO_INITDB_ROOT_PASSWORD=change-me
-MONGO_DATABASE=tglarn
+python3.12 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
+Create local environment configuration:
+
+```bash
+cp .env.example .env
+```
+
+Set the required runtime variables in `.env`:
+
+```text
+TG_LARN_BOT_TOKEN=replace-with-token-from-botfather
 MONGO_URI=mongodb://tglarn:change-me@localhost:27017/tglarn?authSource=admin
+MONGO_DATABASE=tglarn
+DEFAULT_MAP_VIEW=wide
 GAME_ADAPTER=placeholder
 ```
 
-Do not commit real tokens or passwords.
+Use the real C engine adapter by switching the adapter and pointing to a ReLarn install:
 
-## Run
+```text
+GAME_ADAPTER=relarn_process
+RELARN_BINARY_PATH=/opt/relarn/lib/relarn/relarn.bin
+RELARN_INSTALL_ROOT=/opt/relarn
+RELARN_CYCLE_TIMEOUT_SECONDS=3
+RELARN_CYCLE_SETTLE_SECONDS=0.12
+```
 
-Recommended local container run path:
+Run the local Podman stack:
 
 ```bash
-source ~/.zprofile
 ./deploy/local-up.sh
 ```
 
-The script creates `.env` from `.env.example` if needed, builds `localhost/tglarn-bot:dev`, starts MongoDB, and starts the bot. If `podman-compose` is installed it uses `deploy/compose.yml`; otherwise it falls back to direct `podman build/run`, which avoids Docker Desktop compose-provider issues. Stop foreground bot execution with `Ctrl+C`, then stop local containers with:
+Run the stack detached and follow bot logs:
+
+```bash
+./deploy/local-up.sh -d
+podman logs -f tglarn-bot
+```
+
+Stop local containers:
 
 ```bash
 ./deploy/local-down.sh
 ```
 
-Detached mode:
+Run the bot directly from the virtual environment after MongoDB is available:
 
 ```bash
-source ~/.zprofile
-./deploy/local-up.sh -d
-podman logs -f tglarn-bot
+. .venv/bin/activate
+set -a
+. .env
+set +a
+python -m tglarn_bot.main
 ```
 
-If your Podman Compose provider is configured correctly, you can also run compose directly:
+Run linting and the full test suite:
 
 ```bash
-source ~/.zprofile
-set -a; source .env; set +a
-podman compose -f deploy/compose.yml up --build -d
+.venv/bin/python -m ruff check .
+.venv/bin/python -m pytest
 ```
 
-For local Python development against the Mongo container exposed on `127.0.0.1:27017`:
+The repository currently contains 136 tests. They cover menu keyboards, text rendering, Pillow image rendering, placeholder gameplay, ReLarn prompt detection, inventory flows, store invoices, number prompts, stale button rejection, optimistic locking, adapter error boundaries, and session isolation.
 
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -e '.[dev]'
-source ~/.zprofile
-set -a; source .env; set +a
-.venv/bin/python -m tglarn_bot.main
-```
+# Licensing & Credits
 
-The bot currently exposes `/start` and `/menu`, plus inline buttons for resuming the game, restarting with confirmation, rules, legend, about, repository link, and display size selection. The Rules menu is split into Controls and Game Mechanics. The active game screen is driven by inline buttons and is edited in place after button presses, so normal button play does not spam new bot messages. Text commands such as `north`, `south`, `east`, `west`, `look`, `status`, and `help` remain available as a fallback; unlike button presses, each typed command sends a new game response message so the latest result stays next to the player's input. Fallback responses are persisted in MongoDB and remembered as the new active game screen for later buttons. Display sizes currently render map viewports as `medium` 21x11, `wide` 31x15, and `max` 52x23. See `deploy/README.md` for the container strategy and Kubernetes-readiness notes.
+`tglarn` is distributed under the GNU General Public License Version 2 terms applicable to the ReLarn-derived work. The root GPL license text is stored as `LICENSE.txt`; the upstream ReLarn copy is preserved at `vendor/relarn/LICENSE.txt`.
 
-The experimental `relarn_process` adapter runs the upstream C ReLarn binary under a pseudo-terminal for each action. It stores the native ReLarn savefile as a base64 blob in Mongo session state, so player progress is still database-backed and does not require a long-running game process per user. The container image builds ReLarn into `/opt/relarn`; for local Python runs you must either keep `GAME_ADAPTER=placeholder` or point `RELARN_BINARY_PATH` and `RELARN_INSTALL_ROOT` at a local ReLarn build/install tree.
+Attribution and license breakdown:
 
-## Current Placeholder Actions
+- Core engine: ReLarn, Copyright (C) 1986-2020 by The Authors. The imported engine is located at `vendor/relarn/` and is distributed under the GNU General Public License Version 2, or at the user's option any later version, as stated in `vendor/relarn/Copyright.txt`.
+- Field of View library: `libfov`, located at `vendor/relarn/src/fov/`, Copyright (c) 2006 Greg McIntyre. It is distributed under permissive MIT terms. The preserved license text is available at `LICENSES/libfov-MIT.txt` and `vendor/relarn/src/fov/COPYING-libfov`.
+- Font asset: `Inconsolata-Medium.ttf`, located at `vendor/relarn/data/fonts/`, Copyright 2006 The Inconsolata Project Authors. It is licensed under the SIL Open Font License 1.1. The preserved license text is available at `LICENSES/inconsolata-OFL-1.1.txt` and `vendor/relarn/data/fonts/OFL.txt`.
+- Local modifications: files outside `vendor/relarn/` are tglarn-specific project structure, Telegram integration, deployment support, documentation, and tests.
 
-- `north`, `n`, `up` - move north.
-- `south`, `s`, `down` - move south.
-- `east`, `e`, `right` - move east.
-- `west`, `w`, `left` - move west.
-- `nw`, `ne`, `sw`, `se` - move diagonally.
-- `wait`, `.` - wait one turn.
-- `descend`, `go down`, `>` - go down stairs when standing on stairs.
-- `look`, `l` - inspect the area.
-- `status`, `stats` - show hero stats.
-- `help`, `?` - show help and map legend.
-- `/menu` - open the main menu.
-
-## Required Challenge Documents
-
-- `SPEC.md` - game rules, scope, requirements, acceptance criteria.
-- `ARCHITECTURE.md` - stack, design, decisions, AI workflow.
-- `RETROSPECTIVE.md` - AI-native development workflow and lessons learned.
-
-## Remotes
-
-GitHub origin:
-
-```bash
-git remote add origin git@github.com:SimonBorin/tglarn.git
-```
-
-Required GitLab challenge remote will be added later under:
-
-```text
-https://git.ringcentral.com/rc-ai-learning
-```
-
-Suggested repository name:
-
-```text
-simon-borin-tglarn
-```
-
-## License
-
-This project is intended to be distributed under GPL-2.0-or-later because it is based on ReLarn, which is licensed under GNU GPL version 2 or, at your option, any later version.
-
-The full GPL v2 text is in `LICENSE.txt`.
-
-The imported ReLarn source retains its original copyright and license notices under `vendor/relarn/`.
-
-The field-of-view library in `vendor/relarn/src/fov/` is separately licensed under a permissive MIT-style license by Greg McIntyre. Its notice is preserved in `vendor/relarn/src/fov/COPYING-libfov`, copied to `LICENSES/libfov-MIT.txt`, and summarized in `NOTICE.md`.
-
-The bundled Inconsolata font is licensed under the SIL Open Font License 1.1. Its notice is preserved in `vendor/relarn/data/fonts/OFL.txt`, copied to `LICENSES/inconsolata-OFL-1.1.txt`, and summarized in `NOTICE.md`.
+Pop-culture references and artifacts appearing in the upstream game belong to their respective rights holders. Their presence in ReLarn or this wrapper does not imply endorsement, sponsorship, or affiliation.

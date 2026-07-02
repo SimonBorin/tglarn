@@ -1,85 +1,67 @@
-# Retrospective
+# AI Tools Used
 
-This document is a living retrospective for the AI-Native Development Challenge. It will be updated as implementation progresses.
+- Codex: implementation agent, repository operator, refactoring assistant, and test architect.
+- Gemini: prompt engineer, external system analyst, and state-machine strategy assistant.
 
-## AI Tools Used
+# Development Workflow
 
-- Codex: repository setup, structure planning, license review, documentation drafting, and command-line project operations.
+The project was built through a collaborative AI-native loop. Gemini served as the system analyst, converting gameplay failures and architectural risks into structured prompts. Codex served as the core programmer, reading the repository, editing code, refactoring infrastructure, and expanding tests. The User acted as the final architectural filter, QA reviewer, product lead, and scope owner.
 
-## Development Workflow
+The working loop was:
 
-Initial workflow:
+1. The User identified a gameplay or infrastructure gap.
+2. Gemini transformed the gap into a precise state-machine or architecture prompt.
+3. Codex inspected the repository and upstream C source.
+4. Codex implemented the smallest coherent fix.
+5. Codex added regression tests.
+6. The User reviewed the outcome and selected the next risk area.
 
-1. Discussed project idea and constraints with the AI assistant.
-2. Created a local git repository for `tglarn`.
-3. Added GitHub remote for the fork.
-4. Imported upstream ReLarn source into `vendor/relarn/`.
-5. Reviewed upstream licensing and third-party notices.
-6. Created top-level project documentation and challenge-required documents.
-7. Kept original source, bot code, adapter code, deployment, docs, and tests separated by directory.
+# What Worked Well
 
-Planned workflow:
+The Gap Analysis audit phase was the key success pattern. Forcing the AI to map C terminal inputs to Python states before coding eliminated systemic state desynchronization bugs. Store invoices, number prompts, sale multi-picklists, indexed lists, object prompts, and inventory submenus stopped being vague UI problems and became explicit adapter states.
 
-1. Define a minimal playable Telegram command loop.
-2. Implement adapter code first, then Telegram handlers.
-3. Add tests after each working slice.
-4. Containerize with Podman.
-5. Add GitLab CI.
-6. Update this retrospective after each major iteration.
+This was especially important because the original C game uses terminal prompts as its protocol. A missing `y`, `n`, ESC, Enter, item letter, cursor movement, or numeric input can leave the C process waiting indefinitely. The audit-first approach made those hidden protocol steps visible.
 
-## What Worked Well
+The test suite also became a forcing function. Every major prompt and persistence behavior gained coverage, which made aggressive infrastructure refactors possible without losing gameplay behavior.
 
-So far:
+# What Did Not Work Well
 
-- AI was useful for quickly turning a broad idea into a concrete repository layout.
-- AI helped identify license obligations beyond the main GPL license, including libfov and bundled Inconsolata font notices.
-- Keeping `vendor/relarn/` separate from new code made licensing and architecture easier to reason about.
-- The AI-assisted checklist approach helped avoid missing required challenge documents.
+Initial attempts to generate functional code too quickly caused the bot to drop intermediate C prompt inputs. The first versions handled obvious button presses but missed transactional states such as invoices, gold counts, tax payments, bank deposits, and multi-item sale completion.
 
-## What Did Not Work Well
+Those failures exposed the main flaw in the early approach: treating ReLarn screens as static output instead of treating them as states in an input protocol. The project had to pivot from feature generation to state-machine design.
 
-So far:
+Infrastructure boundaries also arrived later than ideal. Event-loop blocking, subprocess cleanup, PTY descriptor ownership, stale Telegram callbacks, and MongoDB versioning should have been part of the first architecture pass.
 
-- Writing outside the initial sandbox root required repeated permission escalations.
-- Shell quoting around Markdown content with backticks was error-prone.
-- The project direction changed while setup was already underway, so documentation needed to be realigned with the hackathon requirements.
+# Surprises and Discoveries
 
-## Surprises and Discoveries
+The most surprising result was the high accuracy of Codex when managing low-level UNIX abstractions. Codex correctly refactored `os.openpty`, PTY descriptor cleanup, `os.killpg`, process groups, signal escalation, and explicit `process.wait` reaping to prevent zombie processes.
 
-- ReLarn contains more than just GPL-covered game code: `src/fov/` has a separate permissive license, and the bundled Inconsolata font uses the SIL Open Font License.
-- The optional one-click GitLab/GitDocs bonus is not a natural fit for a Telegram bot unless the bot is hosted or a separate browser demo is created.
-- The challenge documentation requirements are useful as architecture forcing functions, not just paperwork.
+Another discovery was that visual fidelity required image rendering. Telegram text formatting is not a terminal emulator. Pillow became essential because it converted ReLarn's colorful ANSI/curses output into stable images that preserve the intended retro layout across clients.
 
-## Estimated Percentage of AI-Generated Code
+The team also discovered that the original C game contains more interactive states than expected. Stores and banks are not just menus; they are nested protocols with confirmations, numeric prompts, modal result screens, cancellations, and explicit exits.
 
-Current estimate:
+# Estimated Percentage of AI-Generated Code
 
-- New project scaffolding/docs: high AI assistance, roughly 80-90% drafted by AI and reviewed by the user.
-- Imported ReLarn code: 0% AI-generated; third-party upstream source.
-- Final application code: TBD after implementation.
+90-95% of codebase execution and test coverage was generated by AI under human architectural direction.
 
-This estimate will be revised before final submission.
+The imported ReLarn source under `vendor/relarn/` is upstream third-party code and is not AI-generated. The human contribution was strongest in product judgment, architectural boundaries, risk prioritization, acceptance criteria, and review.
 
-## Time Spent
+# Time Spent
 
-Current rough estimate:
+Exact git-history development window: 3 days, 11 hours, 51 minutes, and 41 seconds.
 
-- Repository setup and source import: 30-45 minutes.
-- License review and notice setup: 30-45 minutes.
-- Challenge documentation alignment: 30 minutes.
+The value was calculated from the current git log:
 
-Implementation time: TBD.
+- First commit: `2026-06-26T12:24:58+02:00`, `Chore: first commit`.
+- Latest commit: `2026-06-30T00:16:39+02:00`, `fix: add bank and dnd store prompts`.
+- Commit count at analysis time: 44 commits.
 
-## What I Would Do Differently Next Time
+This measures the elapsed time between the first and latest committed repository revisions, as requested by the challenge documentation prompt.
 
-- Start from the challenge deliverables before creating project-specific docs.
-- Create all required root documents in the first commit.
-- Decide early whether the demo target is Telegram-hosted, local-only, or browser-playable.
-- Use smaller file-writing steps when Markdown contains shell-sensitive characters.
+# Key Lessons for the Organization
 
-## Key Lessons Learned
+Generative AI is highly effective for wrapping legacy C and C++ utilities into modern asynchronous services, but only when the human engineer acts as an architectural systems boundary controller.
 
-- AI works best here as a repository co-pilot when it continuously verifies the filesystem and git state.
-- License review should happen before implementation, especially when adapting an existing game.
-- A clear directory boundary between upstream code and new integration code reduces future maintenance risk.
-- Retrospective notes should be captured during development, while the workflow issues are still fresh.
+The strongest pattern was not asking AI to write a feature immediately. The strongest pattern was asking AI to inspect the legacy protocol, produce a state-machine gap analysis, implement one safe boundary at a time, and add tests that made the boundary permanent.
+
+For organization-scale modernization, this means AI can accelerate integration, testing, and refactoring work dramatically. The human engineer still needs to own process isolation, concurrency rules, persistence safety, failure semantics, licensing compliance, and final product judgment.

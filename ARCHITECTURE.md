@@ -1,146 +1,97 @@
-# Architecture
+# Technology Stack
 
-## Technology Stack
+- Python 3.11+ architecture target. The current repository metadata requires Python 3.12+ and configures Ruff for `py312`.
+- Telegram framework: aiogram v3.
+- Persistence: MongoDB-compatible document storage. The challenge stack describes this as MongoDB with the Motor driver; the current repository implements the async MongoDB boundary with PyMongo 4.11+ `AsyncMongoClient`, which serves the same async persistence role behind `MongoSessionStore`.
+- Rendering: Pillow for rasterizing terminal maps, modal screens, splash frames, and credits into PNG images.
+- Terminal parsing: `pyte` for reading pseudo-terminal output into a Python terminal buffer.
+- Native engine: original C ReLarn compiled from `vendor/relarn/` and executed through `subprocess.Popen`.
+- PTY bridge: `os.openpty`, terminal sizing, process groups, and controlled stdin/stdout interaction.
+- Runtime packaging: Podman, `Containerfile`, and `deploy/compose.yml`.
+- Validation: `pytest`, `pytest-asyncio`, and `ruff`.
 
-Planned stack:
+# Architecture Overview
 
-- Language: Python 3.12+ for Telegram bot and adapter code.
-- Upstream game source: C ReLarn source imported under `vendor/relarn/`; the container image compiles it for the runtime platform.
-- Terminal bridge: `pyte` parses curses/ANSI output from the upstream game pty bridge.
-- Bot API: Telegram Bot API through `aiogram` 3.x.
-- Persistence: MongoDB-compatible document database for MVP, with a future path to Amazon DocumentDB. Python code should use PyMongo async APIs when the storage layer is wired.
-- Runtime: container-first deployment with Podman on a VM for MVP; Kubernetes-compatible structure later.
-- CI/CD: GitLab CI for tests and optional deployment.
-- Documentation: Markdown in repository root.
+`tglarn` is an asynchronous Telegram adapter around a synchronous C terminal game. The central design constraint is that ReLarn expects stdin/stdout terminal interaction, while Telegram expects event-driven callbacks and messages.
 
-## Architecture Overview
-
-The project is intentionally split into layers:
+The runtime layers are:
 
 ```text
 Telegram user
-  -> bot/tglarn_bot/      Telegram command and callback handling
-  -> game/                Python game adapter boundary
-  -> vendor/relarn/       Imported original ReLarn source
-  -> persistence          Session state and turn storage
+  -> bot/tglarn_bot/      aiogram handlers, callbacks, keyboards, rendering
+  -> bot/tglarn_bot/services.py
+                           async session boundary and adapter offloading
+  -> bot/tglarn_bot/storage.py
+                           MongoDB persistence and optimistic locking
+  -> game/tglarn_game/relarn_process.py
+                           ReLarn subprocess, PTY, prompt state machine
+  -> vendor/relarn/       upstream C game engine and assets
 ```
 
-The bot layer should not directly modify imported upstream game internals. It should call a stable adapter API that accepts a player/session id plus a command and returns renderable text and state updates.
+The Telegram handlers never call the blocking C adapter directly. `GameSessionService` serializes work per player with an actor lock, then executes heavy adapter operations through `asyncio.to_thread`. A bounded `asyncio.Semaphore(4)` limits simultaneous adapter work so multiple slow C cycles cannot starve the bot event loop.
 
-## Proposed Components
+The ReLarn adapter treats each command as a controlled process cycle:
 
-### `vendor/relarn/`
+1. Restore the player's native save blob from MongoDB state.
+2. Create a temporary home/runtime directory for ReLarn.
+3. Open a PTY with `os.openpty`.
+4. Start the C binary as a subprocess in a separate process group.
+5. Send command bytes, including prompt answers, ESC, Enter, or numeric input.
+6. Capture and parse terminal output.
+7. Detect maps, prompts, modal screens, game-over screens, and save output.
+8. Return a `GameResponse` with new state, screen text, status, actions, and optional prompt metadata.
+9. Close PTY descriptors and terminate/reap the process group.
 
-Contains the original upstream ReLarn source imported for reference, porting, and adaptation. This tree should remain close to upstream. If changes are needed, they should be documented and kept minimal.
+MongoDB stores the durable session boundary. A session contains the native ReLarn save blob, last rendered output, prompt metadata, map view, active Telegram message metadata, and `state_version`. This lets the bot recover after restarts and reject stale Telegram callbacks.
 
-### `game/`
+# Major Design Decisions
 
-Owns the Telegram-friendly game adapter. There are currently two implementations: `PlaceholderGameAdapter` for deterministic bot/storage testing and `RelarnProcessAdapter` for the experimental upstream C ReLarn bridge. Expected responsibilities:
+1. Thread offloading bounded by `asyncio.Semaphore(4)`.
 
-- session id handling;
-- command normalization;
-- invoking or wrapping game logic;
-- returning `GameResponse` objects containing state, screen text, log entries, and status;
-- converting game output into concise text suitable for Telegram;
-- providing testable functions independent of Telegram.
+   ReLarn is a blocking terminal application. Running it directly in an aiogram callback would block the event loop for every other user. The service layer wraps adapter operations with `asyncio.to_thread` and limits concurrent adapter work to four slots. This keeps Telegram polling responsive while still allowing parallel player sessions.
 
-### `bot/tglarn_bot/`
+2. Optimistic Concurrency Control using `state_version` and `$inc`.
 
-Owns Telegram-specific behavior:
+   Telegram users can press inline buttons faster than the bot can edit the message. To eliminate button-spam race conditions, session writes match both `telegram_user_id` and the expected `state_version`, then atomically increment `state_version` with `$inc`. If MongoDB returns no document, the write is rejected as stale and the valid stored `engine_state` is preserved.
 
-- `/start` and `/menu` flows;
-- command handlers;
-- inline keyboards for menu actions;
-- restart confirmation before progress reset;
-- map view preference controls;
-- formatting messages;
-- error handling for invalid commands;
-- environment configuration.
+3. Pillow-based visual engine for cross-platform ANSI grid rendering.
 
-### `deploy/`
+   The original C engine outputs colorful ANSI/curses grids. Telegram Markdown and HTML cannot guarantee stable colored monospace layout across mobile and desktop clients. Pillow rasterizes the captured terminal buffer into clean PNG images so walls, floors, monsters, player position, modal screens, and game-over text keep a consistent retro presentation.
 
-Owns operational files:
+4. Explicit PTY and process lifecycle ownership.
 
-- Podman `Containerfile` and compose files;
-- environment variable examples;
-- VM deployment notes;
-- GitLab CI/CD configuration if it is not kept at repository root.
+   The adapter owns every file descriptor and process it creates. Startup failure closes both PTY ends. Shutdown escalates from process-group termination to process-group kill and waits for the child process to be reaped. This avoids file descriptor leaks and zombie ReLarn processes.
 
-### `tests/`
+5. Prompt handling as a state machine.
 
-Owns automated tests:
+   ReLarn has many interactive terminal states: stores, bank prompts, tax prompts, object prompts, inventory menus, indexed picklists, lettered picklists, yes/no invoices, and multi-pick sale lists. The adapter records pending prompt metadata in `engine_state` so Telegram buttons answer the exact terminal state that produced them.
 
-- adapter unit tests;
-- bot handler smoke tests where practical;
-- session isolation tests;
-- CI checks.
+# AI Tooling & Agent Workflow
 
-## Database Decision
+The project used a three-role AI-native workflow:
 
-The selected persistence layer is a MongoDB-compatible document database. The MVP will run MongoDB in a neighboring Podman container. The bot will connect through a `MONGO_URI`, so the same application code can later point at a separate managed database such as Amazon DocumentDB.
+- Product Owner / Tech Lead: User, defining scope, reviewing architecture, setting acceptance criteria, and deciding which risks mattered.
+- Prompt Engineer / AI Strategist: Gemini, producing high-level state-machine prompts and directing the audit phases.
+- Core Developer / Test Architect: Codex, executing repository changes, implementing Python code, refactoring concurrency and PTY lifecycle management, and expanding the automated tests.
 
-This is a better fit than SQLite for the target architecture because the bot should not depend on a local database file once deployed beyond the first VM. It is also simpler than PostgreSQL/Aurora for this project because player sessions and game state are mutable JSON-like documents and do not need relational joins.
+Workflow:
 
-To keep the future DocumentDB path realistic, the adapter should use conservative MongoDB operations: keyed lookups, single-document updates, explicit indexes, append-only turn logs, and `retryWrites=false` in DocumentDB connection strings. Avoid advanced MongoDB features unless they are checked against DocumentDB compatibility.
+1. Initial Scan.
 
-More detail is in `docs/DATABASE.md`.
+   Codex inspected the repository structure, Python modules, tests, deployment files, existing docs, and the upstream C ReLarn source tree before making implementation changes.
 
-## Major Design Decisions
+2. Gap Analysis Report.
 
-1. Keep upstream ReLarn in `vendor/relarn/` rather than mixing it with bot code.
+   Gemini framed a strict state-machine audit. Codex mapped C terminal inputs to Telegram UX states, including store invoices, DND Store prompts, Trading Post sale flows, bank number prompts, inventory picklists, object prompts, and generic indexed lists.
 
-   Reason: this preserves license notices, makes upstream provenance clear, and reduces accidental bot-specific edits in third-party code.
+3. Iterative Execution.
 
-2. Use Telegram direct chats only for MVP.
+   Codex implemented missing adapter states in stages: cancel/ESC infrastructure, `numPrompt`, store buy/sell confirmation, sale completion, indexed picklists, and emoji-free English button labels.
 
-   Reason: the challenge does not require multiplayer, and direct-chat sessions keep state isolation simple and predictable.
+4. Concurrency Hardening.
 
-3. Treat GitLab/GitDocs one-click play as a bonus, not the initial MVP.
+   Codex refactored the infrastructure after the gameplay flows were covered: bounded `asyncio.to_thread`, PTY cleanup, process-group termination, zombie reaping, optimistic MongoDB locking, stale callback rejection, base64 validation, and crash-safe service responses.
 
-   Reason: a Telegram bot requires a running backend and a bot token. A hosted bot link can satisfy easy demo access later, while GitLab Pages would require a separate browser-playable adaptation.
+5. Test Expansion.
 
-4. Prefer a small adapter boundary before deep porting.
-
-   Reason: the fastest path to a complete challenge project is to expose a playable slice, then iterate. The placeholder adapter validates this boundary; the first C ReLarn integration uses a process-backed pty bridge behind the same API without rewriting Telegram handlers.
-
-5. Store upstream game progress in Mongo as native save blobs.
-
-   Reason: the original C game already has a save/restore layer. The bridge adapter writes the current savefile to temporary disk for one action, then stores the resulting savefile as base64 in Mongo session state. This keeps per-user progress database-backed without a long-running process per player.
-
-6. Run everything in containers.
-
-   Reason: the project should be deployable on a VM without hand-installed services and should have a clear path to Kubernetes later. The MVP should use Podman Compose with separate bot and MongoDB containers.
-
-
-## AI Tooling Used
-
-Current AI tooling:
-
-- Codex for repository setup, documentation drafting, architecture planning, license-notice review, and implementation assistance.
-
-Potential later tools:
-
-- ChatGPT for design review and retrospective synthesis.
-- GitLab CI feedback as an automated validation loop.
-
-## Agent Workflow
-
-Current workflow pattern:
-
-1. User states project direction and constraints.
-2. AI inspects the local repository and upstream license/source files.
-3. AI proposes a conservative structure.
-4. AI creates or updates files in small steps.
-5. AI verifies file contents, git status, and license copies.
-6. User reviews and redirects.
-
-Planned implementation workflow:
-
-1. Draft a narrow playable MVP spec.
-2. Create adapter interfaces before bot handlers.
-3. Implement a minimal command loop.
-4. Add tests around session isolation and command handling.
-5. Containerize with Podman.
-6. Add GitLab CI.
-7. Iterate on UX and documentation.
-8. Record lessons in `RETROSPECTIVE.md` throughout the project, not only at the end.
+   Every major adapter state gained regression coverage. The repository now contains 136 tests spanning keyboards, rendering, image generation, ReLarn prompt parsing, service persistence, stale callbacks, optimistic locking, and error boundaries.
