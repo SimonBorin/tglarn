@@ -30,15 +30,29 @@ Choose your class. Each class starts with different stats, gear, and spell acces
 CHARACTER_CLASS_GUIDE_TEXT = """<b>Class Guide</b>
 New players: Geek, Dwarf, or Rogue are the safest starts. Rambo is a challenge class.
 
-<pre>Class    HP  Role          Spells / starter kit
-Ogre     16  brute         magic missile, 2 random potions
-Wizard    8  caster        magic missile, charm, potion, scrolls
-Klingon  14  fighter       sonic spear, studded leather, potion
-Elf       8  fragile mage  protection, leather, scroll, no weapon
-Rogue    12  agile scout   magic missile, leather, dagger, stealth
-Geek     10  balanced      protection, magic missile, leather, dagger
-Dwarf    12  tough melee   protection, spear
-Rambo     1  challenge     lance of death, no spells</pre>"""
+<b>Ogre</b> - HP 16, brute survivor.
+Magic missile. Starts with 2 random potions.
+
+<b>Wizard</b> - HP 8, fragile caster.
+Magic missile and charm. Starts with treasure finding and scrolls.
+
+<b>Klingon</b> - HP 14, armored fighter.
+Sonic spear. Starts with studded leather and a potion.
+
+<b>Elf</b> - HP 8, defensive caster.
+Protection spell. Starts with leather and a scroll, but no weapon.
+
+<b>Rogue</b> - HP 12, agile scout.
+Magic missile. Starts with leather, dagger, and stealth.
+
+<b>Geek</b> - HP 10, balanced starter.
+Protection and magic missile. Starts with leather and dagger.
+
+<b>Dwarf</b> - HP 12, tough melee.
+Protection spell. Starts with a spear.
+
+<b>Rambo</b> - HP 1, challenge mode.
+No spells. Starts with the lance of death."""
 
 CHARACTER_GENDER_TEXT = """<b>Create Character</b>
 Class: <b>{character_class}</b>
