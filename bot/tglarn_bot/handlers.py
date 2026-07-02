@@ -24,6 +24,7 @@ from .keyboards import (
     CHARACTER_GENDER_BY_ID,
     CallbackData,
     back_to_menu_keyboard,
+    character_class_guide_keyboard,
     character_class_keyboard,
     character_gender_keyboard,
     game_keyboard,
@@ -43,6 +44,7 @@ from .rendering import render_game_response
 from .services import GameSessionService
 from .texts import (
     ABOUT_TEXT,
+    CHARACTER_CLASS_GUIDE_TEXT,
     CHARACTER_CLASS_TEXT,
     CHARACTER_CREATED_TEXT,
     CHARACTER_GENDER_TEXT,
@@ -134,6 +136,15 @@ def register_handlers(
     async def character_intro_callback(callback: CallbackQuery) -> None:
         await _answer_callback(callback)
         await _edit_callback_message(callback, CHARACTER_CLASS_TEXT, character_class_keyboard())
+
+    @router.callback_query(F.data == CallbackData.CHARACTER_CLASS_GUIDE)
+    async def character_class_guide_callback(callback: CallbackQuery) -> None:
+        await _answer_callback(callback)
+        await _edit_callback_message(
+            callback,
+            CHARACTER_CLASS_GUIDE_TEXT,
+            character_class_guide_keyboard(),
+        )
 
     @router.callback_query(F.data.startswith(CallbackData.CHARACTER_CLASS_PREFIX))
     async def character_class_callback(callback: CallbackQuery) -> None:
