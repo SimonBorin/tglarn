@@ -1,5 +1,6 @@
 from tglarn_bot.keyboards import (
     CallbackData,
+    character_class_guide_keyboard,
     character_class_keyboard,
     character_gender_keyboard,
     game_keyboard,
@@ -48,7 +49,17 @@ def test_character_class_keyboard_contains_relarn_classes() -> None:
     assert "Wizard" in texts
     assert "Klingon" in texts
     assert "Rambo" in texts
+    assert "Class Guide" in texts
     assert f"{CallbackData.CHARACTER_CLASS_PREFIX}wizard" in callback_data
+    assert CallbackData.CHARACTER_CLASS_GUIDE in callback_data
+
+
+def test_character_class_guide_keyboard_returns_to_class_selection() -> None:
+    texts = _button_texts(character_class_guide_keyboard())
+    callback_data = _button_callback_data(character_class_guide_keyboard())
+
+    assert texts == ["Back to Classes", "Main Menu"]
+    assert callback_data == [CallbackData.CHARACTER_INTRO, CallbackData.MAIN_MENU]
 
 
 def test_character_gender_keyboard_preserves_selected_class() -> None:
