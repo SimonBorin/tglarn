@@ -77,6 +77,9 @@ class MongoSessionStore:
             return_document=ReturnDocument.AFTER,
         )
 
+    async def get_session(self, telegram_user_id: int) -> dict[str, Any] | None:
+        return await self._sessions.find_one({"telegram_user_id": telegram_user_id})
+
     async def restart_session(
         self,
         telegram_user_id: int,
