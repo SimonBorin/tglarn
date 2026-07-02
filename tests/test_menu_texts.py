@@ -59,8 +59,20 @@ def test_character_class_guide_keyboard_returns_to_class_selection() -> None:
     texts = _button_texts(character_class_guide_keyboard())
     callback_data = _button_callback_data(character_class_guide_keyboard())
 
-    assert texts == ["Back to Classes", "Main Menu"]
-    assert callback_data == [CallbackData.CHARACTER_INTRO, CallbackData.MAIN_MENU]
+    assert texts == [
+        "Ogre",
+        "Wizard",
+        "Klingon",
+        "Elf",
+        "Rogue",
+        "Geek",
+        "Dwarf",
+        "Rambo",
+        "Back to Classes",
+        "Main Menu",
+    ]
+    assert f"{CallbackData.CHARACTER_CLASS_PREFIX}elf" in callback_data
+    assert callback_data[-2:] == [CallbackData.CHARACTER_INTRO, CallbackData.MAIN_MENU]
 
 
 def test_character_class_guide_text_mentions_high_risk_classes() -> None:
@@ -68,6 +80,7 @@ def test_character_class_guide_text_mentions_high_risk_classes() -> None:
     assert "no weapon" in user_texts.CHARACTER_CLASS_GUIDE_TEXT
     assert "Rambo" in user_texts.CHARACTER_CLASS_GUIDE_TEXT
     assert "challenge" in user_texts.CHARACTER_CLASS_GUIDE_TEXT
+    assert "<pre>" not in user_texts.CHARACTER_CLASS_GUIDE_TEXT
 
 
 def test_character_gender_keyboard_preserves_selected_class() -> None:
