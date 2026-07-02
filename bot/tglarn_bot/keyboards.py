@@ -86,17 +86,7 @@ def intro_keyboard() -> InlineKeyboardMarkup:
 
 
 def character_class_keyboard() -> InlineKeyboardMarkup:
-    rows = []
-    for index in range(0, len(CHARACTER_CLASSES), 2):
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=label,
-                    callback_data=f"{CallbackData.CHARACTER_CLASS_PREFIX}{class_id}",
-                )
-                for label, class_id in CHARACTER_CLASSES[index : index + 2]
-            ]
-        )
+    rows = _character_class_selection_rows()
     rows.append(
         [
             InlineKeyboardButton(
@@ -110,8 +100,9 @@ def character_class_keyboard() -> InlineKeyboardMarkup:
 
 
 def character_class_guide_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+    rows = _character_class_selection_rows()
+    rows.extend(
+        [
             [
                 InlineKeyboardButton(
                     text="Back to Classes",
@@ -121,6 +112,20 @@ def character_class_guide_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.MAIN_MENU)],
         ]
     )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _character_class_selection_rows() -> list[list[InlineKeyboardButton]]:
+    return [
+        [
+            InlineKeyboardButton(
+                text=label,
+                callback_data=f"{CallbackData.CHARACTER_CLASS_PREFIX}{class_id}",
+            )
+            for label, class_id in CHARACTER_CLASSES[index : index + 2]
+        ]
+        for index in range(0, len(CHARACTER_CLASSES), 2)
+    ]
 
 
 def character_gender_keyboard(class_id: str) -> InlineKeyboardMarkup:
