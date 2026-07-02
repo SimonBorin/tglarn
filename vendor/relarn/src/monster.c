@@ -1,5 +1,9 @@
 // This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
+/* * Modified by Semen Borin for the tglarn Telegram Bot project in 2026.
+ * Date of change: July 2, 2026
+ * Nature of modification: Adapted terminal input/output handling and state-machine compatibility for async PTY execution.
+ */
 
 
 #include "internal_assert.h"
