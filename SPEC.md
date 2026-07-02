@@ -1,90 +1,65 @@
-# Specification
+# Game Rules
 
-## Project
+`tglarn` follows the original ReLarn/Larn rules through the upstream C engine. Python does not reimplement combat, inventory, economy, dungeon generation, or win/loss logic. It acts as an adapter around the terminal interface.
 
-`tglarn` is a Telegram bot adaptation of ReLarn/Larn for the AI-Native Development Challenge.
+High-level rules exposed by the wrapper:
 
-## Game Rules
+- The player controls one adventurer in a turn-based roguelike dungeon.
+- Movement commands include cardinal and diagonal directions.
+- The world contains monsters, traps, items, gold, stairs, stores, banks, schools, tax prompts, and modal events from the C game.
+- Inventory interaction uses terminal picklists and item action submenus.
+- Stores include buy flows, sell flows, indexed item lists, sale multi-selection, invoice confirmation, and explicit exit states.
+- Banks and tax systems require numeric prompts for deposits, withdrawals, and payments.
+- The player can lose through death, failed survival conditions, or other game-over states controlled by ReLarn.
+- The player wins by recovering the cure objective and satisfying the original game completion conditions.
 
-The game rules are inherited from ReLarn/Larn. At MVP level, the Telegram bot should expose the existing text-game loop rather than redesign the game.
+# Scope Definition
 
-High-level gameplay:
+The MVP scope is a Telegram direct-chat wrapper for isolated single-player ReLarn sessions. The bot supports many players in parallel, but each player has an independent session document and game state.
 
-- The player controls a single adventurer.
-- The player explores dungeon-like locations through text commands.
-- The player can inspect status, move, interact with the world, fight monsters, collect items, and progress through the original game objective.
-- The game state changes only when the player submits a command.
-- One Telegram direct chat maps to one independent player session.
+In scope:
 
-Detailed original rules remain in the imported upstream documentation under `vendor/relarn/doc/` and will be mapped into Telegram-friendly commands during implementation.
+- Isolated per-user sessions keyed primarily by Telegram user ID, with active Telegram chat and message IDs tracked for UI validation.
+- Non-interactive background adapter execution slots for blocking C-engine calls. The implementation does not keep one permanent C process per player; each ReLarn cycle is run through a controlled subprocess and PTY lifecycle.
+- State serialization through MongoDB session documents, including native ReLarn save blobs encoded as base64.
+- Separation between local integration code and the upstream `vendor/relarn/` tree.
+- Contextual inline keyboards for movement, menus, inventory, stores, prompts, confirmations, and modal screens.
+- Text fallback for direct command entry and numeric prompt entry.
+- Crash-safe service boundaries that prevent adapter failures from corrupting persisted state.
 
-## Scope
+Out of scope:
 
-### MVP Scope
+- Multiplayer shared worlds.
+- Group-chat gameplay.
+- Rewriting ReLarn mechanics in Python.
+- Modifying upstream C gameplay rules for Telegram convenience.
+- Browser-only gameplay.
 
-- Import and preserve upstream ReLarn source and license notices.
-- Define a clean project structure for upstream code, game adapter, Telegram bot, deployment, docs, and tests.
-- Build a minimal Telegram bot flow that supports one direct-chat player session per Telegram user.
-- Provide a main menu via `/start` and `/menu`, with actions for starting the game flow, restarting with confirmation, rules, repository link, and display size settings.
-- Persist player session state server-side in a MongoDB-compatible document database.
-- Provide enough commands to start a new game, view the current game screen/status, submit commands, and continue playing. The current placeholder adapter supports basic movement, look/status/help commands, and display-size-dependent viewport rendering until the ReLarn engine adapter is wired.
-- Add automated smoke tests for session isolation and adapter behavior.
-- Provide Podman-based local/deployment setup where all runtime services run in containers.
-- Keep the required challenge documentation up to date.
+# Functional Requirements
 
-### Out of Scope for MVP
+- Route Telegram interactions by direct-chat context and Telegram user identity.
+- Store active `chat_id` and `message_id` values so stale inline callbacks can be rejected before a game command is executed.
+- Maintain one MongoDB session document per player with `engine_state`, `last_screen`, `last_log`, `last_status`, `map_view`, active message metadata, and `state_version`.
+- Generate dynamic, contextual inline keyboards from `GameResponse.actions` and pending prompt metadata.
+- Keep inline button labels emoji-free, using labels such as `Cancel`, `Main Menu`, `Confirm sale`, `Decline`, `Finish sale`, and `Exit Store`.
+- Support lettered picklists, indexed picklists, direction prompts, object prompts, inventory action menus, multi-pick sale lists, store invoices, and number prompts.
+- Provide a `numPrompt` path for numeric C prompts such as tax payments, gold drops, bank deposits, and bank withdrawals.
+- Offer numeric prompt presets such as `Zero`, `One Hundred`, `Five Hundred`, `One Thousand`, `Max`, plus `Cancel` and `Main Menu` where applicable.
+- Accept plain text numeric messages as fallback input when the C engine is waiting for a number.
+- Send ESC-equivalent cancellation commands to the C process for prompt cleanup when a user chooses `Cancel` or leaves a prompt through `Main Menu`.
+- Persist only valid post-command game states. Prompt screens, crashes, and stale writes must not overwrite the last valid save state.
+- Use optimistic concurrency control for game-state advancement so rapid button presses cannot overwrite a newer state.
 
-- Group chat or multiplayer support.
-- Full UI redesign.
-- Competitive scoring or leaderboards.
-- Rewriting ReLarn gameplay from scratch.
-- One-click GitLab Pages/GitDocs playable version. This is a bonus target and may require either a hosted Telegram bot link or a separate browser demo.
+# Acceptance Criteria
 
-## Functional Requirements
-
-1. A user can start the bot in a direct Telegram chat.
-2. A user can open the main menu with `/start` or `/menu` at any time.
-3. A user can create or restart their own game session.
-4. Restart requires explicit confirmation because current progress will be lost.
-5. Player progress is persisted automatically by default; there is no manual save/load mechanism.
-6. A user can submit supported game commands through Telegram messages and/or inline buttons.
-7. A user receives a readable game response after each command.
-8. Different Telegram users have isolated game states.
-9. Bot runtime secrets are provided via environment variables and are never committed.
-10. The original ReLarn source remains separated under `vendor/relarn/`.
-11. Third-party license notices remain available in the repository.
-12. The project can be run locally or on a VM using Podman with MongoDB in a neighboring container.
-13. The repository contains `README.md`, `SPEC.md`, `ARCHITECTURE.md`, and `RETROSPECTIVE.md`.
-
-## Non-Functional Requirements
-
-- The code should favor small, testable adapter boundaries over direct bot-to-game coupling.
-- The runtime should be restartable without losing persisted sessions.
-- All runtime services should run in containers; no manually installed bot or database service should be required on the VM.
-- Container design should keep a future Kubernetes deployment path open.
-- The project should be understandable to reviewers who have not played ReLarn.
-- Documentation should record AI tooling decisions, prompts/workflow patterns, and lessons learned.
-
-## Acceptance Criteria
-
-### Initial Structure Acceptance
-
-- `vendor/relarn/` contains imported upstream ReLarn source.
-- `bot/`, `game/`, `deploy/`, `docs/`, and `tests/` exist.
-- Root documentation files exist: `README.md`, `SPEC.md`, `ARCHITECTURE.md`, `RETROSPECTIVE.md`.
-- Root license and notices exist: `LICENSE.txt`, `NOTICE.md`, `LICENSES/`.
-
-### MVP Gameplay Acceptance
-
-- A reviewer can configure a Telegram bot token and run the service.
-- A reviewer can open a direct chat with the bot and start a game.
-- The bot returns game output after each supported command. During the adapter phase, placeholder output is acceptable as long as it goes through the same persistence and rendering path as the final engine.
-- Two different Telegram users can play without state leaking between sessions.
-- Basic automated tests pass in CI.
-- The bot and database run through Podman containers for local/VM deployment.
-
-### Final Challenge Acceptance
-
-- The implementation is working by July 15, 2026.
-- Documentation describes the final setup, run flow, architecture, and AI-native workflow.
-- `RETROSPECTIVE.md` contains concrete observations about what worked, what did not work, surprises, AI-generated code estimate, time spent, and lessons learned.
+- All 136+ unit and integration tests pass with `pytest`.
+- `ruff check .` passes without lint errors.
+- No blocking synchronous adapter call runs on the main asyncio event loop.
+- Blocking C-engine work is offloaded through bounded worker execution.
+- Stale button callbacks are rejected when the callback message is not the current active game message.
+- MongoDB game-state writes use `state_version` and atomic `$inc` updates to prevent race-condition overwrites.
+- C-engine crashes, unexpected early exits, invalid base64 save blobs, and adapter exceptions are isolated to the current player response.
+- Failure responses do not advance or corrupt the stored `engine_state`.
+- Store buy/sell transactions expose selection, confirmation, cancellation, sale completion, and store exit controls.
+- Numeric prompts support both inline presets and typed numeric fallback.
+- Telegram rendering remains stable across clients by using Pillow-generated images for terminal grid output instead of relying only on Markdown or HTML text layout.
