@@ -1,3 +1,5 @@
+import base64
+
 from tglarn_bot.keyboards import (
     CallbackData,
     character_class_keyboard,
@@ -31,6 +33,7 @@ from tglarn_game.relarn_process import (
     _should_capture_map_snapshot,
     _should_force_full_redraw,
     _should_keep_base_save_for_prompt,
+    _state_save_blob,
     _TerminalCell,
 )
 
@@ -408,6 +411,29 @@ def test_read_map_snapshot_parses_canonical_map_dump(tmp_path) -> None:
     }
 
 
+def test_state_save_blob_rejects_invalid_base64() -> None:
+    state = {"adapter": "relarn_process", "save_blob_b64": "not valid base64"}
+
+    try:
+        _state_save_blob(state)
+    except ValueError as exc:
+        assert "Invalid ReLarn save blob encoding" in str(exc)
+    else:
+        raise AssertionError("Expected invalid save blob to be rejected")
+
+
+def test_state_save_blob_rejects_oversized_save() -> None:
+    encoded = base64.b64encode(b"x" * (1024 * 1024 + 1)).decode("ascii")
+    state = {"adapter": "relarn_process", "save_blob_b64": encoded}
+
+    try:
+        _state_save_blob(state)
+    except ValueError as exc:
+        assert "exceeds the maximum allowed size" in str(exc)
+    else:
+        raise AssertionError("Expected oversized save blob to be rejected")
+
+
 def test_detect_prompt_extracts_spell_picklist_options() -> None:
     prompt = _detect_prompt(
         [
@@ -480,10 +506,12 @@ def test_detect_prompt_extracts_dealer_picklist_options() -> None:
         "question": "Choose an item.",
         "kind": "indexed_picklist",
         "options": [
-            {"key": "0", "label": "Killer Speed (100 bucks)"},
-            {"key": "1", "label": "Groovy Acid (250 bucks)"},
-            {"key": "2", "label": "Monster Hash (500 bucks)"},
+            {"key": "0", "label": "Killer Speed One Hundred Bucks"},
+            {"key": "1", "label": "Groovy Acid Two Hundred Fifty Bucks"},
+            {"key": "2", "label": "Monster Hash Five Hundred Bucks"},
+            {"key": "exit_store", "label": "Exit Store"},
         ],
+        "store": True,
     }
 
 
@@ -507,10 +535,12 @@ def test_detect_prompt_extracts_dnd_store_picklist_options() -> None:
         "question": "Choose an item.",
         "kind": "indexed_picklist",
         "options": [
-            {"key": "0", "label": "a spear (30 gold)"},
-            {"key": "1", "label": "leather armor (50 gold)"},
-            {"key": "2", "label": "a magic potion (90 gold)"},
+            {"key": "0", "label": "a spear Thirty Gold"},
+            {"key": "1", "label": "leather armor Fifty Gold"},
+            {"key": "2", "label": "a magic potion Ninety Gold"},
+            {"key": "exit_store", "label": "Exit Store"},
         ],
+        "store": True,
     }
 
 
@@ -526,6 +556,90 @@ def test_picklist_prompt_answers_require_enter() -> None:
     assert prompt is not None
     assert _prompt_requires_enter(prompt)
     assert _prompt_answer_from_command("prompt:a", prompt) == "a"
+
+
+def test_detect_prompt_extracts_sale_multi_picklist_options() -> None:
+    prompt = _detect_prompt(
+        [
+            "              Welcome to the Larn Trading Post.  What would you like to sell?",
+            "  a.   a spear",
+            "  b. * a sparkling sapphire",
+            "Up:k/CTRL+p/UP Down:j/CTRL+n/DOWN Select:ENTER/SPC Quit:ESC/CTRL+x",
+            "To select an individual item, type the corresponding",
+            "key; CTRL+v escapes.",
+        ]
+    )
+
+    assert prompt == {
+        "question": "Welcome to the Larn Trading Post.  What would you like to sell?",
+        "kind": "multi_picklist",
+        "options": [
+            {"key": "a", "label": "A spear", "selected": False},
+            {"key": "b", "label": "Selected A sparkling sapphire", "selected": True},
+            {"key": "done", "label": "Finish sale"},
+            {"key": "exit_store", "label": "Exit Store"},
+        ],
+    }
+
+
+def test_multi_picklist_prompt_answers_toggle_items_and_finish() -> None:
+    prompt = {
+        "question": "Sell which item?",
+        "kind": "multi_picklist",
+        "options": [
+            {"key": "a", "label": "A spear", "selected": False},
+            {"key": "done", "label": "Done"},
+        ],
+    }
+
+    assert _prompt_answer_from_command("multipick:a", prompt) == "a"
+    assert _prompt_answer_keys("a", prompt) == [b"a", b"\n"]
+    assert _prompt_answer_from_command("multipick:done", prompt) == "done"
+    assert _prompt_answer_keys("done", prompt) == [b"\x1b"]
+
+
+def test_multi_picklist_exit_unselects_selected_items_before_escape() -> None:
+    prompt = {
+        "question": "Sell which item?",
+        "kind": "multi_picklist",
+        "options": [
+            {"key": "a", "label": "Selected A spear", "selected": True},
+            {"key": "b", "label": "A potion", "selected": False},
+            {"key": "done", "label": "Finish sale"},
+            {"key": "exit_store", "label": "Exit Store"},
+        ],
+    }
+
+    assert _prompt_answer_from_command("multipick:exit_store", prompt) == "exit_store"
+    assert _prompt_answer_keys("exit_store", prompt) == [b"a", b"\n", b"\x1b"]
+
+
+def test_detect_prompt_extracts_sale_confirmation_options() -> None:
+    prompt = _detect_prompt(
+        [
+            "You are selling the following items:",
+            "",
+            "    a.   a spear",
+            "",
+            "Our offer is 15 gp.",
+            "",
+            "Continue with sale?",
+            "    ---- y or return for yes, n or escape for no ----",
+        ]
+    )
+
+    assert prompt == {
+        "question": "Continue with sale?",
+        "kind": "invoice_confirm",
+        "options": [
+            {"key": "y", "label": "Confirm sale"},
+            {"key": "n", "label": "Decline"},
+        ],
+    }
+    assert _prompt_answer_from_command("prompt:y", prompt) == "y"
+    assert _prompt_answer_keys("y", prompt) == [b"y"]
+    assert _prompt_answer_from_command("prompt:n", prompt) == "n"
+    assert _prompt_answer_keys("n", prompt) == [b"n"]
 
 
 def test_detect_prompt_extracts_bank_menu_options() -> None:
@@ -564,9 +678,9 @@ def test_indexed_picklist_prompt_answers_move_to_selected_row() -> None:
         "question": "Choose an item.",
         "kind": "indexed_picklist",
         "options": [
-            {"key": "0", "label": "Killer Speed (100 bucks)"},
-            {"key": "1", "label": "Groovy Acid (250 bucks)"},
-            {"key": "2", "label": "Monster Hash (500 bucks)"},
+            {"key": "0", "label": "Killer Speed One Hundred Bucks"},
+            {"key": "1", "label": "Groovy Acid Two Hundred Fifty Bucks"},
+            {"key": "2", "label": "Monster Hash Five Hundred Bucks"},
         ],
     }
 
@@ -574,6 +688,47 @@ def test_indexed_picklist_prompt_answers_move_to_selected_row() -> None:
 
     assert answer == "2"
     assert _prompt_answer_keys(answer, prompt) == [b"j", b"j", b"\n"]
+
+
+def test_indexed_store_exit_sends_escape() -> None:
+    prompt = {
+        "question": "Choose an item.",
+        "kind": "indexed_picklist",
+        "store": True,
+        "options": [
+            {"key": "0", "label": "a spear Thirty Gold"},
+            {"key": "exit_store", "label": "Exit Store"},
+        ],
+    }
+
+    answer = _prompt_answer_from_command("pick:exit_store", prompt)
+
+    assert answer == "exit_store"
+    assert _prompt_answer_keys(answer, prompt) == [b"\x1b"]
+
+
+def test_detect_prompt_extracts_generic_indexed_picklist_options() -> None:
+    prompt = _detect_prompt(
+        [
+            "Banish which monster?",
+            "     'A' giant ant",
+            "     'B' bat",
+            "     'C' centipede",
+            "Up:k/CTRL+p/UP Down:j/CTRL+n/DOWN Select:ENTER Quit:ESC/CTRL+x",
+            "To select an individual item, type the corresponding",
+            "key; CTRL+v escapes.",
+        ]
+    )
+
+    assert prompt == {
+        "question": "Banish which monster?",
+        "kind": "indexed_picklist",
+        "options": [
+            {"key": "0", "label": "A giant ant"},
+            {"key": "1", "label": "B bat"},
+            {"key": "2", "label": "C centipede"},
+        ],
+    }
 
 
 def test_detect_prompt_extracts_inventory_items() -> None:
@@ -596,12 +751,12 @@ def test_detect_prompt_extracts_inventory_items() -> None:
     assert prompt["question"] == "Choose an inventory item."
     assert prompt["kind"] == "inventory"
     assert [(option["key"], option["label"]) for option in prompt["options"]] == [
-        ("a", "a. magic potion"),
-        ("b", "b. scroll of create artifact"),
-        ("c", "c. magic scroll"),
-        ("d", "d. sparkling sapphire"),
-        ("e", "e. enchanting emerald"),
-        ("f", "f. speed"),
+        ("a", "a magic potion"),
+        ("b", "b scroll of create artifact"),
+        ("c", "c magic scroll"),
+        ("d", "d sparkling sapphire"),
+        ("e", "e enchanting emerald"),
+        ("f", "f speed"),
     ]
     assert prompt["options"][0]["actions"] == [
         {"key": "quaff:a", "label": "Quaff"},
@@ -623,7 +778,7 @@ def test_inventory_prompt_selects_item_for_action_submenu() -> None:
         "options": [
             {
                 "key": "a",
-                "label": "a. magic potion",
+                "label": "a magic potion",
                 "item_label": "a magic potion",
                 "actions": [
                     {"key": "quaff:a", "label": "Quaff"},
@@ -651,7 +806,69 @@ def test_inventory_action_prompt_answers_send_item_action_without_reopening_inve
 
     assert answer == "quaff:a"
     assert _prompt_answer_keys(answer, prompt) == [b"q", b"a"]
-    assert not _prompt_replays_trigger(prompt)
+    assert not _prompt_replays_trigger(prompt, answer)
+    assert _prompt_replays_trigger(prompt, "cancel")
+    assert _prompt_answer_keys("cancel", prompt) == [b"\x1b"]
+
+
+def test_prompt_system_answers_send_escape() -> None:
+    prompt = {
+        "question": "Do you (g) go inside, or (n) stay here?",
+        "kind": "choice",
+        "options": [
+            {"key": "g", "label": "Go inside"},
+            {"key": "n", "label": "Stay here"},
+        ],
+    }
+
+    assert _prompt_answer_from_command("prompt:cancel", prompt) == "cancel"
+    assert _prompt_answer_from_command("prompt:menu", prompt) == "menu"
+    assert _prompt_answer_keys("cancel", prompt) == [b"\x1b"]
+    assert _prompt_answer_keys("menu", prompt) == [b"\x1b"]
+
+
+def test_detect_prompt_extracts_number_prompt_options() -> None:
+    prompt = _detect_prompt(
+        [""] * 19
+        + [
+            "Welcome to the Larn Revenue Service district office.",
+            "According to our records, you owe us 1200 gp.",
+            "How much do you want to pay? [900]",
+        ]
+    )
+
+    assert prompt == {
+        "question": "How much do you want to pay?",
+        "kind": "number_prompt",
+        "default": 900,
+        "max": 900,
+        "options": [
+            {"key": "0", "label": "Zero"},
+            {"key": "100", "label": "One Hundred"},
+            {"key": "500", "label": "Five Hundred"},
+            {"key": "1000", "label": "One Thousand"},
+            {"key": "max", "label": "Maximum"},
+        ],
+    }
+
+
+def test_number_prompt_accepts_button_and_text_answers() -> None:
+    prompt = {
+        "question": "How much gold do you drop?",
+        "kind": "number_prompt",
+        "default": 750,
+        "max": 750,
+        "options": [
+            {"key": "0", "label": "Zero"},
+            {"key": "max", "label": "Maximum"},
+        ],
+    }
+
+    assert _prompt_answer_from_command("number:100", prompt) == "100"
+    assert _prompt_answer_keys("100", prompt) == [b"100", b"\n"]
+    assert _prompt_answer_from_command("250", prompt) == "250"
+    assert _prompt_answer_from_command("number:max", prompt) == "max"
+    assert _prompt_answer_keys("max", prompt) == [b"750", b"\n"]
 
 
 def test_modal_exit_key_closes_dealer_result_page() -> None:
