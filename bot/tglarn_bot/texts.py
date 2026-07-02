@@ -27,6 +27,19 @@ The town is quiet. The dungeon entrance is nearby. First, choose who will enter.
 CHARACTER_CLASS_TEXT = """<b>Create Character</b>
 Choose your class. Each class starts with different stats, gear, and spell access."""
 
+CHARACTER_CLASS_GUIDE_TEXT = """<b>Class Guide</b>
+New players: Geek, Dwarf, or Rogue are the safest starts. Rambo is a challenge class.
+
+<pre>Class    HP  Role          Spells / starter kit
+Ogre     16  brute         magic missile, 2 random potions
+Wizard    8  caster        magic missile, charm, potion, scrolls
+Klingon  14  fighter       sonic spear, studded leather, potion
+Elf       8  fragile mage  protection, leather, scroll, no weapon
+Rogue    12  agile scout   magic missile, leather, dagger, stealth
+Geek     10  balanced      protection, magic missile, leather, dagger
+Dwarf    12  tough melee   protection, spear
+Rambo     1  challenge     lance of death, no spells</pre>"""
+
 CHARACTER_GENDER_TEXT = """<b>Create Character</b>
 Class: <b>{character_class}</b>
 
