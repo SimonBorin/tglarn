@@ -41,6 +41,7 @@ _SAVE_COMMAND = b"S"
 _PROMPT_COMMAND_PREFIX = "prompt:"
 _NUMBER_COMMAND_PREFIX = "number:"
 _MAP_SNAPSHOT_ENV = "TGLARN_MAP_SNAPSHOT"
+_TURN_LOG_ENV = "TGLARN_TURN_LOG_PATH"
 _SAVE_MODAL_EXIT_PASSES = 4
 _MAX_SAVE_BLOB_BYTES = 1024 * 1024
 
@@ -567,7 +568,7 @@ class RelarnProcessAdapter:
         return GameResponse(
             state=next_state,
             screen=screen,
-            log=log or fallback_log,
+            log=_response_log(cycle_result.turn_log, log, fallback_log, status),
             status=status | {"adapter": "relarn_process", "save_size": next_state["save_size"]},
             actions=actions,
         )
@@ -635,6 +636,7 @@ class _RelarnCycleResult:
     map_snapshot: dict[str, Any] | None = None
     game_over: bool = False
     game_over_log: list[str] | None = None
+    turn_log: list[str] | None = None
 
 
 def _prepare_home(home: Path, state: dict[str, Any] | None) -> Path:
@@ -664,6 +666,17 @@ def _relarnrc_for_state(state: dict[str, Any] | None) -> str:
         "show-unrevealed\n"
         "dark-screen\n"
     )
+
+
+def _response_log(
+    turn_log: list[str] | None,
+    rendered_log: list[str],
+    fallback_log: list[str],
+    status: dict[str, Any],
+) -> list[str]:
+    if turn_log and status.get("screen_type") == "map":
+        return turn_log
+    return rendered_log or fallback_log
 
 
 def _state_character(state: dict[str, Any] | None) -> dict[str, str] | None:
@@ -721,6 +734,7 @@ def _execute_relarn_cycle(
                     "RELARN_INSTALL_ROOT": str(install_root),
                     "TERM": "xterm-256color",
                     _MAP_SNAPSHOT_ENV: str(_map_snapshot_path(home)),
+                    _TURN_LOG_ENV: str(_turn_log_path(home)),
                 }
             )
             process = subprocess.Popen(
@@ -746,6 +760,7 @@ def _execute_relarn_cycle(
                 deadline=time.monotonic() + timeout_seconds,
                 done=lambda: terminal.contains("Welcome"),
             )
+            _truncate_turn_log(_turn_log_path(home))
             for key in keys:
                 os.write(master_fd, key)
                 _read_for(master_fd, terminal, settle_seconds)
@@ -753,6 +768,7 @@ def _execute_relarn_cycle(
 
             display_snapshot = terminal.snapshot()
             display_lines = display_snapshot.lines
+            turn_log = _read_turn_log(_turn_log_path(home))
             if process.poll() is not None:
                 _read_once(master_fd, terminal, 0.0)
                 snapshot = terminal.snapshot()
@@ -763,11 +779,14 @@ def _execute_relarn_cycle(
                     snapshot.lines,
                     display_cells=snapshot.cells,
                     game_over=game_over,
-                    game_over_log=_game_over_log_lines(snapshot.lines) if game_over else None,
+                    game_over_log=(turn_log or _game_over_log_lines(snapshot.lines))
+                    if game_over
+                    else None,
+                    turn_log=turn_log,
                 )
 
             if _is_game_over_display(display_lines):
-                game_over_log = _game_over_log_lines(display_lines)
+                game_over_log = turn_log or _game_over_log_lines(display_lines)
                 final_snapshot = _finish_game_over_flow(
                     master_fd,
                     terminal,
@@ -779,6 +798,7 @@ def _execute_relarn_cycle(
                     display_cells=final_snapshot.cells,
                     game_over=True,
                     game_over_log=game_over_log or _game_over_log_lines(final_snapshot.lines),
+                    turn_log=turn_log,
                 )
 
             if _should_force_full_redraw(display_lines):
@@ -796,6 +816,7 @@ def _execute_relarn_cycle(
                     display_lines,
                     display_cells=display_snapshot.cells,
                     map_snapshot=map_snapshot,
+                    turn_log=turn_log,
                 )
 
             _close_transient_screens_before_save(
@@ -811,6 +832,7 @@ def _execute_relarn_cycle(
                 display_lines,
                 display_cells=display_snapshot.cells,
                 map_snapshot=map_snapshot,
+                turn_log=turn_log,
             )
         finally:
             _terminate_process_group(process)
@@ -966,6 +988,33 @@ def _read_once(fd: int, terminal: _TerminalCapture, timeout: float) -> None:
         return
     if data:
         terminal.feed(data)
+
+
+def _turn_log_path(home: Path) -> Path:
+    return home / ".relarn" / "tglarn-turn.log"
+
+
+def _truncate_turn_log(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("", encoding="utf-8")
+
+
+def _read_turn_log(path: Path) -> list[str]:
+    try:
+        raw_log = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    return _turn_log_lines(raw_log)
+
+
+def _turn_log_lines(raw_log: str) -> list[str]:
+    lines: list[str] = []
+    for line in raw_log.splitlines():
+        cleaned = _clean_log_line(line)
+        if not cleaned or cleaned == _CONTINUE_PROMPT or cleaned == "Saving . . .":
+            continue
+        lines.append(cleaned)
+    return lines
 
 
 def _map_snapshot_path(home: Path) -> Path:
