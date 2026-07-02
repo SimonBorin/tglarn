@@ -6,7 +6,7 @@
 
 Play the public Telegram build here: [@tglarnbot](https://t.me/tglarnbot).
 
-Scan this QR code from Telegram or open the handle directly:
+Scan this QR code or open the handle directly:
 
 ![Telegram QR code for @tglarnbot](docs/screenshots/tglarn-bot-qr.png)
 
@@ -30,10 +30,6 @@ Larn is a classic roguelike about a parent trying to find a cure for a daughter 
 The game remains turn-based and command-driven. Movement, inventory actions, spellcasting, stores, banks, tax prompts, object interactions, and win/loss conditions are still controlled by the original C engine. The Telegram bot changes the interface, not the rules.
 
 # Screenshots
-
-Live bot QR code:
-
-![Telegram QR code for @tglarnbot](docs/screenshots/tglarn-bot-qr.png)
 
 Rendered dungeon map:
 
