@@ -1,5 +1,7 @@
 """Inline keyboards for the Telegram chat UI."""
 
+import re
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from tglarn_game import GameAction, GameResponse
 
@@ -20,6 +22,12 @@ CHARACTER_GENDERS = (
     ("Nonbinary", "nonbinary"),
 )
 CHARACTER_GENDER_BY_ID = {gender_id: label for label, gender_id in CHARACTER_GENDERS}
+_BUTTON_TEXT_REPLACEMENTS = {
+    "0": "Zero",
+    "100": "One Hundred",
+    "500": "Five Hundred",
+    "1000": "One Thousand",
+}
 
 
 class CallbackData:
@@ -238,7 +246,7 @@ def _context_action_rows(actions) -> list[list[InlineKeyboardButton]]:
     return [
         [
             InlineKeyboardButton(
-                text=action.label,
+                text=_button_text(action.label),
                 callback_data=f"{CallbackData.GAME_PREFIX}{action.command}",
             )
         ]
@@ -246,14 +254,28 @@ def _context_action_rows(actions) -> list[list[InlineKeyboardButton]]:
     ]
 
 
+def _button_text(label: str) -> str:
+    stripped = label.strip()
+    replacement = _BUTTON_TEXT_REPLACEMENTS.get(stripped)
+    if replacement is not None:
+        return replacement
+    cleaned = re.sub(r"[^A-Za-z ]+", " ", stripped)
+    cleaned = " ".join(cleaned.split())
+    return cleaned or "Action"
+
+
 def _pending_prompt_actions(pending_prompt) -> list[GameAction]:
     if not isinstance(pending_prompt, dict):
         return []
-    if pending_prompt.get("kind") == "direction":
-        return []
     kind = pending_prompt.get("kind")
+    if kind == "direction":
+        return _system_prompt_actions()
     if kind == "indexed_picklist":
         command_prefix = "pick:"
+    elif kind == "multi_picklist":
+        command_prefix = "multipick:"
+    elif kind == "number_prompt":
+        command_prefix = "number:"
     elif kind == "inventory":
         command_prefix = "invitem:"
     elif kind == "inventory_action":
@@ -279,7 +301,15 @@ def _pending_prompt_actions(pending_prompt) -> list[GameAction]:
                 command=f"{command_prefix}{key}",
             )
         )
+    actions.extend(_system_prompt_actions())
     return actions
+
+
+def _system_prompt_actions() -> list[GameAction]:
+    return [
+        GameAction(id="prompt_cancel", label="Cancel", command="prompt:cancel"),
+        GameAction(id="prompt_menu", label="Main Menu", command="prompt:menu"),
+    ]
 
 
 def spell_menu_keyboard() -> InlineKeyboardMarkup:

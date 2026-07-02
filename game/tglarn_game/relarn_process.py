@@ -13,6 +13,7 @@ import fcntl
 import os
 import re
 import select
+import signal
 import struct
 import subprocess
 import tempfile
@@ -38,8 +39,10 @@ _REDRAW_COMMAND = b"\x0c"
 _MAP_SNAPSHOT_COMMAND = b"\x07"
 _SAVE_COMMAND = b"S"
 _PROMPT_COMMAND_PREFIX = "prompt:"
+_NUMBER_COMMAND_PREFIX = "number:"
 _MAP_SNAPSHOT_ENV = "TGLARN_MAP_SNAPSHOT"
 _SAVE_MODAL_EXIT_PASSES = 4
+_MAX_SAVE_BLOB_BYTES = 1024 * 1024
 
 _VIEWPORTS: dict[MapView, tuple[int, int]] = {
     "medium": (21, 11),
@@ -58,14 +61,71 @@ _PROMPT_KIND_DIRECTION = "direction"
 _PROMPT_KIND_INDEXED_PICKLIST = "indexed_picklist"
 _PROMPT_KIND_INVENTORY = "inventory"
 _PROMPT_KIND_INVENTORY_ACTION = "inventory_action"
+_PROMPT_KIND_INVOICE_CONFIRM = "invoice_confirm"
+_PROMPT_KIND_MULTI_PICKLIST = "multi_picklist"
+_PROMPT_KIND_NUMBER = "number_prompt"
 _PROMPT_KIND_PICKLIST = "picklist"
+_PROMPT_CANCEL_KEY = "cancel"
+_PROMPT_MENU_KEY = "menu"
+_PROMPT_EXIT_STORE_KEY = "exit_store"
+_PROMPT_SYSTEM_KEYS = {_PROMPT_CANCEL_KEY, _PROMPT_MENU_KEY}
+_PROMPT_ESCAPE_KEYS = _PROMPT_SYSTEM_KEYS | {_PROMPT_EXIT_STORE_KEY}
 _INVENTORY_ACTION_COMMAND_PREFIX = "inv:"
 _INVENTORY_ITEM_COMMAND_PREFIX = "invitem:"
+_MULTI_PICKLIST_COMMAND_PREFIX = "multipick:"
+_MULTI_PICKLIST_DONE_KEY = "done"
+_MULTI_PICKLIST_CANCEL_KEY = "cancel"
 _PICKLIST_COMMAND_PREFIX = "pick:"
 _STORE_PICKLIST_OPTION_RE = re.compile(
     r"^\*?\s*(?P<label>.+?)\s+(?:(?P<bucks>\d+)\s+bucks|\$(?P<dollars>\d+))$"
 )
+_INDEXED_PICKLIST_UI_RE = re.compile(r"\bSelect:ENTER(?:/SPC)?\b")
+_MULTI_PICKLIST_OPTION_RE = re.compile(
+    r"^\s*([A-Za-z])\.\s+(?P<selected>\*)?\s*(?P<label>.+?)\s*$"
+)
 _MENU_OPTION_RE = re.compile(r"^\s*\(([A-Za-z0-9])\)(.+?)\s*$")
+_NUMBER_PROMPT_RE = re.compile(
+    r"(?P<question>"
+    r"(?:Balance:\s*\d+\s+GP\.\s+)?"
+    r"(?:"
+    r"(?:Deposit|Withdraw)\s+how\s+much\?"
+    r"|How\s+much\s+(?:gold\s+do\s+you\s+drop|do\s+you\s+want\s+to\s+pay|do\s+you\s+donate)\?"
+    r")"
+    r")\s*\[(?P<default>\d+)\]\s*$",
+    re.I,
+)
+_NUMBER_WORDS_UNDER_TWENTY = (
+    "Zero",
+    "One",
+    "Two",
+    "Three",
+    "Four",
+    "Five",
+    "Six",
+    "Seven",
+    "Eight",
+    "Nine",
+    "Ten",
+    "Eleven",
+    "Twelve",
+    "Thirteen",
+    "Fourteen",
+    "Fifteen",
+    "Sixteen",
+    "Seventeen",
+    "Eighteen",
+    "Nineteen",
+)
+_NUMBER_WORDS_TENS = {
+    20: "Twenty",
+    30: "Thirty",
+    40: "Forty",
+    50: "Fifty",
+    60: "Sixty",
+    70: "Seventy",
+    80: "Eighty",
+    90: "Ninety",
+}
 _INVENTORY_ACTION_KEYS = {
     "drop": b"d",
     "eat": b"e",
@@ -404,7 +464,7 @@ class RelarnProcessAdapter:
         if viewport_origin is not None:
             prompt_state["viewport_origin"] = viewport_origin
         replay_keys = []
-        if _prompt_replays_trigger(pending_prompt):
+        if _prompt_replays_trigger(pending_prompt, answer):
             replay_keys.extend(key.encode("ascii") for key in trigger_keys)
         replay_keys.extend(_prompt_answer_keys(answer, pending_prompt))
         return self._run_cycle(prompt_state, replay_keys, map_view, [])
@@ -649,110 +709,136 @@ def _execute_relarn_cycle(
     settle_seconds: float,
 ) -> _RelarnCycleResult:
     master_fd, slave_fd = os.openpty()
+    process: subprocess.Popen[bytes] | None = None
     try:
-        _set_terminal_size(slave_fd, _TERMINAL_ROWS, _TERMINAL_COLUMNS)
-        env = os.environ.copy()
-        env.update(
-            {
-                "HOME": str(home),
-                "USER": "tglarn",
-                "RELARN_INSTALL_ROOT": str(install_root),
-                "TERM": "xterm-256color",
-                _MAP_SNAPSHOT_ENV: str(_map_snapshot_path(home)),
-            }
-        )
-        process = subprocess.Popen(
-            [str(binary_path)],
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            cwd=str(home),
-            env=env,
-            close_fds=True,
-            start_new_session=True,
-        )
-    finally:
-        os.close(slave_fd)
-
-    try:
-        _read_until(
-            master_fd,
-            terminal,
-            deadline=time.monotonic() + timeout_seconds,
-            done=lambda: terminal.contains("Welcome"),
-        )
-        for key in keys:
-            os.write(master_fd, key)
-            _read_for(master_fd, terminal, settle_seconds)
-        _read_for(master_fd, terminal, settle_seconds)
-
-        display_snapshot = terminal.snapshot()
-        display_lines = display_snapshot.lines
-        if process.poll() is not None:
-            _read_once(master_fd, terminal, 0.0)
-            snapshot = terminal.snapshot()
-            game_over = _is_game_over_display(snapshot.lines)
-            return _RelarnCycleResult(
-                snapshot.lines,
-                display_cells=snapshot.cells,
-                game_over=game_over,
-                game_over_log=_game_over_log_lines(snapshot.lines) if game_over else None,
+        try:
+            _set_terminal_size(slave_fd, _TERMINAL_ROWS, _TERMINAL_COLUMNS)
+            env = os.environ.copy()
+            env.update(
+                {
+                    "HOME": str(home),
+                    "USER": "tglarn",
+                    "RELARN_INSTALL_ROOT": str(install_root),
+                    "TERM": "xterm-256color",
+                    _MAP_SNAPSHOT_ENV: str(_map_snapshot_path(home)),
+                }
             )
+            process = subprocess.Popen(
+                [str(binary_path)],
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                cwd=str(home),
+                env=env,
+                close_fds=True,
+                start_new_session=True,
+            )
+        finally:
+            os.close(slave_fd)
 
-        if _is_game_over_display(display_lines):
-            game_over_log = _game_over_log_lines(display_lines)
-            final_snapshot = _finish_game_over_flow(
+        if process is None:
+            raise RuntimeError("ReLarn process did not start")
+
+        try:
+            _read_until(
+                master_fd,
+                terminal,
+                deadline=time.monotonic() + timeout_seconds,
+                done=lambda: terminal.contains("Welcome"),
+            )
+            for key in keys:
+                os.write(master_fd, key)
+                _read_for(master_fd, terminal, settle_seconds)
+            _read_for(master_fd, terminal, settle_seconds)
+
+            display_snapshot = terminal.snapshot()
+            display_lines = display_snapshot.lines
+            if process.poll() is not None:
+                _read_once(master_fd, terminal, 0.0)
+                snapshot = terminal.snapshot()
+                game_over = _is_game_over_display(snapshot.lines)
+                if not game_over:
+                    raise RuntimeError(f"ReLarn exited early with code {process.returncode}")
+                return _RelarnCycleResult(
+                    snapshot.lines,
+                    display_cells=snapshot.cells,
+                    game_over=game_over,
+                    game_over_log=_game_over_log_lines(snapshot.lines) if game_over else None,
+                )
+
+            if _is_game_over_display(display_lines):
+                game_over_log = _game_over_log_lines(display_lines)
+                final_snapshot = _finish_game_over_flow(
+                    master_fd,
+                    terminal,
+                    process,
+                    timeout_seconds,
+                )
+                return _RelarnCycleResult(
+                    final_snapshot.lines,
+                    display_cells=final_snapshot.cells,
+                    game_over=True,
+                    game_over_log=game_over_log or _game_over_log_lines(final_snapshot.lines),
+                )
+
+            if _should_force_full_redraw(display_lines):
+                os.write(master_fd, _REDRAW_COMMAND)
+                _read_for(master_fd, terminal, settle_seconds)
+                display_snapshot = terminal.snapshot()
+                display_lines = display_snapshot.lines
+
+            map_snapshot = None
+            if _should_capture_map_snapshot(display_lines):
+                map_snapshot = _capture_map_snapshot(master_fd, terminal, home)
+
+            if _should_keep_base_save_for_prompt(display_lines, keys):
+                return _RelarnCycleResult(
+                    display_lines,
+                    display_cells=display_snapshot.cells,
+                    map_snapshot=map_snapshot,
+                )
+
+            _close_transient_screens_before_save(
                 master_fd,
                 terminal,
                 process,
                 timeout_seconds,
+                settle_seconds,
             )
-            return _RelarnCycleResult(
-                final_snapshot.lines,
-                display_cells=final_snapshot.cells,
-                game_over=True,
-                game_over_log=game_over_log or _game_over_log_lines(final_snapshot.lines),
-            )
-
-        if _should_force_full_redraw(display_lines):
-            os.write(master_fd, _REDRAW_COMMAND)
-            _read_for(master_fd, terminal, settle_seconds)
-            display_snapshot = terminal.snapshot()
-            display_lines = display_snapshot.lines
-
-        map_snapshot = None
-        if _should_capture_map_snapshot(display_lines):
-            map_snapshot = _capture_map_snapshot(master_fd, terminal, home)
-
-        if _should_keep_base_save_for_prompt(display_lines, keys):
+            os.write(master_fd, _SAVE_COMMAND)
+            _read_process_to_exit(master_fd, terminal, process, timeout_seconds)
             return _RelarnCycleResult(
                 display_lines,
                 display_cells=display_snapshot.cells,
                 map_snapshot=map_snapshot,
             )
-
-        _close_transient_screens_before_save(
-            master_fd,
-            terminal,
-            process,
-            timeout_seconds,
-            settle_seconds,
-        )
-        os.write(master_fd, _SAVE_COMMAND)
-        _read_process_to_exit(master_fd, terminal, process, timeout_seconds)
-        return _RelarnCycleResult(
-            display_lines,
-            display_cells=display_snapshot.cells,
-            map_snapshot=map_snapshot,
-        )
+        finally:
+            _terminate_process_group(process)
     finally:
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=0.5)
-            except subprocess.TimeoutExpired:
-                process.kill()
         os.close(master_fd)
+
+
+def _terminate_process_group(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        process.wait(timeout=0.5)
+        return
+
+    try:
+        process.wait(timeout=0.5)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    process.wait(timeout=0.5)
 
 
 def _set_terminal_size(fd: int, rows: int, columns: int) -> None:
@@ -1022,12 +1108,46 @@ def _keys_to_text(keys: list[bytes]) -> list[str]:
     return result
 
 
+def _number_words(value: int) -> str:
+    if value < 20:
+        return _NUMBER_WORDS_UNDER_TWENTY[value]
+    if value < 100:
+        tens, remainder = divmod(value, 10)
+        words = _NUMBER_WORDS_TENS[tens * 10]
+        return words if remainder == 0 else f"{words} {_number_words(remainder)}"
+    if value < 1000:
+        hundreds, remainder = divmod(value, 100)
+        words = f"{_number_words(hundreds)} Hundred"
+        return words if remainder == 0 else f"{words} {_number_words(remainder)}"
+    thousands, remainder = divmod(value, 1000)
+    words = f"{_number_words(thousands)} Thousand"
+    return words if remainder == 0 else f"{words} {_number_words(remainder)}"
+
+
+def _button_label_words(label: str) -> str:
+    with_words = re.sub(r"\d+", lambda match: _number_words(int(match.group(0))), label)
+    cleaned = re.sub(r"[^A-Za-z ]+", " ", with_words)
+    return " ".join(cleaned.split())
+
+
+def _system_prompt_answer_from_command(normalized_command: str) -> str | None:
+    if not normalized_command.startswith(_PROMPT_COMMAND_PREFIX):
+        return None
+    answer = normalized_command.removeprefix(_PROMPT_COMMAND_PREFIX).strip().lower()
+    return answer if answer in _PROMPT_SYSTEM_KEYS else None
+
+
 def _prompt_answer_from_command(
     normalized_command: str,
     pending_prompt: dict[str, Any] | None,
 ) -> str | None:
     if pending_prompt is None:
         return None
+    system_answer = _system_prompt_answer_from_command(normalized_command)
+    if system_answer is not None:
+        return system_answer
+    if pending_prompt.get("kind") == _PROMPT_KIND_NUMBER:
+        return _number_prompt_answer_from_command(normalized_command, pending_prompt)
     if pending_prompt.get("kind") == _PROMPT_KIND_INVENTORY_ACTION:
         if not normalized_command.startswith(_INVENTORY_ACTION_COMMAND_PREFIX):
             return None
@@ -1039,10 +1159,27 @@ def _prompt_answer_from_command(
             if isinstance(option, dict)
         }
         return answer if answer in allowed and _inventory_answer_keys(answer) else None
+    if pending_prompt.get("kind") == _PROMPT_KIND_MULTI_PICKLIST:
+        if not normalized_command.startswith(_MULTI_PICKLIST_COMMAND_PREFIX):
+            return None
+        answer = normalized_command.removeprefix(_MULTI_PICKLIST_COMMAND_PREFIX).strip()
+        if answer in _PROMPT_ESCAPE_KEYS:
+            return answer
+        options = pending_prompt.get("options", [])
+        allowed = {
+            str(option.get("key", ""))
+            for option in options
+            if isinstance(option, dict)
+        }
+        if answer in allowed and _multi_picklist_answer_keys(answer, pending_prompt):
+            return answer
+        return None
     if pending_prompt.get("kind") == _PROMPT_KIND_INDEXED_PICKLIST:
         if not normalized_command.startswith(_PICKLIST_COMMAND_PREFIX):
             return None
         answer = normalized_command.removeprefix(_PICKLIST_COMMAND_PREFIX).strip()
+        if answer == _PROMPT_EXIT_STORE_KEY:
+            return answer
         options = pending_prompt.get("options", [])
         allowed = {
             str(option.get("key", ""))
@@ -1068,6 +1205,22 @@ def _prompt_answer_from_command(
     options = pending_prompt.get("options", [])
     allowed = {str(option.get("key", "")).lower() for option in options if isinstance(option, dict)}
     return answer if answer in allowed else None
+
+
+def _number_prompt_answer_from_command(
+    normalized_command: str,
+    pending_prompt: dict[str, Any],
+) -> str | None:
+    if normalized_command.startswith(_NUMBER_COMMAND_PREFIX):
+        answer = normalized_command.removeprefix(_NUMBER_COMMAND_PREFIX).strip().lower()
+    else:
+        answer = normalized_command
+
+    if answer == "max":
+        return answer
+    if not answer.isdecimal():
+        return None
+    return answer
 
 
 def _inventory_item_from_command(
@@ -1098,6 +1251,12 @@ def _inventory_prompt_item(
 
 
 def _prompt_answer_keys(answer: str, pending_prompt: dict[str, Any]) -> list[bytes]:
+    if pending_prompt.get("kind") == _PROMPT_KIND_MULTI_PICKLIST:
+        return _multi_picklist_answer_keys(answer, pending_prompt)
+    if answer in _PROMPT_ESCAPE_KEYS:
+        return [_ESCAPE]
+    if pending_prompt.get("kind") == _PROMPT_KIND_NUMBER:
+        return _number_answer_keys(answer, pending_prompt)
     if pending_prompt.get("kind") == _PROMPT_KIND_INVENTORY_ACTION:
         return _inventory_answer_keys(answer)
     if pending_prompt.get("kind") == _PROMPT_KIND_INDEXED_PICKLIST:
@@ -1110,7 +1269,9 @@ def _prompt_answer_keys(answer: str, pending_prompt: dict[str, Any]) -> list[byt
     return keys
 
 
-def _prompt_replays_trigger(pending_prompt: dict[str, Any]) -> bool:
+def _prompt_replays_trigger(pending_prompt: dict[str, Any], answer: str) -> bool:
+    if answer in _PROMPT_ESCAPE_KEYS:
+        return True
     return pending_prompt.get("kind") != _PROMPT_KIND_INVENTORY_ACTION
 
 
@@ -1124,6 +1285,41 @@ def _inventory_answer_keys(answer: str) -> list[bytes]:
     return [action_key, item_key.encode("ascii")]
 
 
+def _multi_picklist_answer_keys(answer: str, pending_prompt: dict[str, Any]) -> list[bytes]:
+    if answer in {_PROMPT_CANCEL_KEY, _PROMPT_MENU_KEY, _PROMPT_EXIT_STORE_KEY}:
+        return _multi_picklist_clear_selection_keys(pending_prompt)
+    if answer in {_MULTI_PICKLIST_DONE_KEY, _MULTI_PICKLIST_CANCEL_KEY}:
+        return [_ESCAPE]
+    if len(answer) != 1:
+        return []
+    try:
+        return [answer.encode("ascii"), b"\n"]
+    except UnicodeEncodeError:
+        return []
+
+
+def _multi_picklist_clear_selection_keys(pending_prompt: dict[str, Any]) -> list[bytes]:
+    keys: list[bytes] = []
+    options = pending_prompt.get("options", [])
+    if isinstance(options, list):
+        for option in options:
+            if not isinstance(option, dict) or not option.get("selected"):
+                continue
+            item_key = str(option.get("key", ""))
+            if len(item_key) == 1:
+                keys.extend([item_key.encode("ascii"), b"\n"])
+    keys.append(_ESCAPE)
+    return keys
+
+
+def _number_answer_keys(answer: str, pending_prompt: dict[str, Any]) -> list[bytes]:
+    if answer == "max":
+        value = str(pending_prompt.get("default", "0"))
+    else:
+        value = answer
+    return [value.encode("ascii"), b"\n"]
+
+
 def _prompt_requires_enter(pending_prompt: dict[str, Any]) -> bool:
     return pending_prompt.get("kind") == _PROMPT_KIND_PICKLIST
 
@@ -1134,7 +1330,13 @@ def _state_save_blob(state: dict[str, Any] | None) -> bytes | None:
     encoded = state.get("save_blob_b64")
     if not isinstance(encoded, str) or not encoded:
         return None
-    return base64.b64decode(encoded)
+    try:
+        save_blob = base64.b64decode(encoded.encode("ascii"), validate=True)
+    except (binascii.Error, UnicodeEncodeError) as exc:
+        raise ValueError("Invalid ReLarn save blob encoding") from exc
+    if len(save_blob) > _MAX_SAVE_BLOB_BYTES:
+        raise ValueError("ReLarn save blob exceeds the maximum allowed size")
+    return save_blob
 
 
 def _base64_blob_size(encoded: str) -> int:
@@ -1356,6 +1558,11 @@ def _is_modal_ui_hint(line: str) -> bool:
         or cleaned.startswith("Select:")
         or cleaned.startswith("To select an individual item")
         or cleaned.startswith("key; CTRL+v escapes")
+        or (
+            "or return for yes" in cleaned.lower()
+            and "or escape for no" in cleaned.lower()
+        )
+        or cleaned.lower().startswith("---- press return or escape to exit")
     )
 
 
@@ -1501,6 +1708,12 @@ def _detect_prompt(lines: list[str]) -> dict[str, Any] | None:
     menu_prompt = _detect_parenthesized_menu_prompt(lines)
     if menu_prompt is not None:
         return menu_prompt
+    invoice_prompt = _detect_invoice_confirm_prompt(lines)
+    if invoice_prompt is not None:
+        return invoice_prompt
+    page_confirm_prompt = _detect_showpages_confirm_prompt(lines)
+    if page_confirm_prompt is not None:
+        return page_confirm_prompt
 
     text = " ".join(line.strip() for line in lines[_CONSOLE_START_ROW:] if line.strip())
     if not text:
@@ -1511,6 +1724,9 @@ def _detect_prompt(lines: list[str]) -> dict[str, Any] | None:
             "kind": _PROMPT_KIND_DIRECTION,
             "options": list(_DIRECTION_PROMPT_OPTIONS),
         }
+    number_prompt = _detect_number_prompt(text)
+    if number_prompt is not None:
+        return number_prompt
     prompt_start = _PROMPT_START_RE.search(text)
     if prompt_start is None:
         return None
@@ -1525,13 +1741,18 @@ def _detect_prompt(lines: list[str]) -> dict[str, Any] | None:
 
 def _detect_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
     nonempty = [line.rstrip() for line in lines if line.strip()]
+    multi = _is_multi_picklist_screen(nonempty)
     for index, line in enumerate(nonempty):
         question = line.strip()
         if not question.endswith("?"):
             continue
-        options = _picklist_options(nonempty[index + 1 :])
+        if multi:
+            options = _multi_picklist_options(nonempty[index + 1 :])
+        else:
+            options = _picklist_options(nonempty[index + 1 :])
         if options:
-            return {"question": question, "kind": _PROMPT_KIND_PICKLIST, "options": options}
+            kind = _PROMPT_KIND_MULTI_PICKLIST if multi else _PROMPT_KIND_PICKLIST
+            return {"question": question, "kind": kind, "options": options}
     return None
 
 
@@ -1541,11 +1762,26 @@ def _detect_indexed_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
         for line in lines
         if line.strip() and not _is_modal_ui_hint(line)
     ]
-    if not _is_indexed_store_screen(nonempty):
-        return None
+    if _is_indexed_store_screen(nonempty):
+        options = _indexed_store_options(nonempty)
+        if not options:
+            return None
+        return {
+            "question": "Choose an item.",
+            "kind": _PROMPT_KIND_INDEXED_PICKLIST,
+            "options": options + [_store_exit_option()],
+            "store": True,
+        }
 
+    generic_prompt = _detect_generic_indexed_picklist_prompt(lines)
+    if generic_prompt is not None:
+        return generic_prompt
+    return None
+
+
+def _indexed_store_options(lines: list[str]) -> list[dict[str, str]]:
     options: list[dict[str, str]] = []
-    for line in nonempty:
+    for line in lines:
         match = _STORE_PICKLIST_OPTION_RE.match(line)
         if match is None:
             continue
@@ -1557,13 +1793,36 @@ def _detect_indexed_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
         options.append(
             {
                 "key": str(len(options)),
-                "label": f"{label} ({price} {unit})",
+                "label": f"{_button_label_words(label)} {_number_words(int(price))} {unit.title()}",
             }
         )
+    return options
+
+
+def _detect_generic_indexed_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
+    if not _is_indexed_picker_screen(lines) or _is_display_only_picklist(lines):
+        return None
+
+    nonempty = [
+        line.strip()
+        for line in lines
+        if line.strip() and not _is_modal_ui_hint(line)
+    ]
+    question_index = _indexed_picklist_heading_index(nonempty)
+    if question_index is None:
+        return None
+
+    options: list[dict[str, str]] = []
+    for line in nonempty[question_index + 1 :]:
+        label = _generic_indexed_picklist_label(line)
+        if not label:
+            continue
+        options.append({"key": str(len(options)), "label": _button_label_words(label)})
+
     if not options:
         return None
     return {
-        "question": "Choose an item.",
+        "question": nonempty[question_index],
         "kind": _PROMPT_KIND_INDEXED_PICKLIST,
         "options": options,
     }
@@ -1573,6 +1832,32 @@ def _is_indexed_store_screen(lines: list[str]) -> bool:
     return any("Dealer McDope's Pad" in line for line in lines) or any(
         "Larn Thrift Shoppe" in line for line in lines
     )
+
+
+def _is_indexed_picker_screen(lines: list[str]) -> bool:
+    return any(_INDEXED_PICKLIST_UI_RE.search(line) for line in lines)
+
+
+def _is_display_only_picklist(lines: list[str]) -> bool:
+    return any("Discoveries To Date:" in line for line in lines)
+
+
+def _indexed_picklist_heading_index(lines: list[str]) -> int | None:
+    for index, line in enumerate(lines):
+        if line.endswith("?") or line.endswith(":"):
+            return index
+    return None
+
+
+def _generic_indexed_picklist_label(line: str) -> str:
+    label = " ".join(line.split())
+    if not label:
+        return ""
+    if _PICKLIST_OPTION_RE.match(label) or _MENU_OPTION_RE.match(label):
+        return ""
+    if label.endswith(":") or label.startswith("Gold:"):
+        return ""
+    return label
 
 
 def _detect_inventory_prompt(lines: list[str]) -> dict[str, Any] | None:
@@ -1623,6 +1908,62 @@ def _detect_parenthesized_menu_prompt(lines: list[str]) -> dict[str, Any] | None
     }
 
 
+def _detect_showpages_confirm_prompt(lines: list[str]) -> dict[str, Any] | None:
+    text = _screen_text(lines).lower()
+    if "or return for yes" not in text or "or escape for no" not in text:
+        return None
+
+    nonempty = [line.strip() for line in lines if line.strip()]
+    for index, line in enumerate(nonempty):
+        lowered = line.lower()
+        if "or return for yes" not in lowered or "or escape for no" not in lowered:
+            continue
+        for candidate in reversed(nonempty[:index]):
+            if candidate.endswith("?"):
+                return {
+                    "question": candidate,
+                    "kind": _PROMPT_KIND_CHOICE,
+                    "options": _yes_no_options(),
+                }
+    return {
+        "question": "Confirm?",
+        "kind": _PROMPT_KIND_CHOICE,
+        "options": _yes_no_options(),
+    }
+
+
+def _detect_invoice_confirm_prompt(lines: list[str]) -> dict[str, Any] | None:
+    text = _screen_text(lines).lower()
+    if (
+        "you are selling the following items:" not in text
+        or "our offer is" not in text
+        or "continue with sale?" not in text
+        or "or return for yes" not in text
+        or "or escape for no" not in text
+    ):
+        return None
+    return {
+        "question": "Continue with sale?",
+        "kind": _PROMPT_KIND_INVOICE_CONFIRM,
+        "options": _invoice_confirm_options(),
+    }
+
+
+def _detect_number_prompt(text: str) -> dict[str, Any] | None:
+    match = _NUMBER_PROMPT_RE.search(text)
+    if match is None:
+        return None
+    default_value = int(match.group("default"))
+    question = " ".join(match.group("question").split())
+    return {
+        "question": question,
+        "kind": _PROMPT_KIND_NUMBER,
+        "default": default_value,
+        "max": default_value,
+        "options": _number_prompt_options(default_value),
+    }
+
+
 def _inventory_items(lines: list[str]) -> list[dict[str, str]]:
     items: list[dict[str, str]] = []
     for line in lines:
@@ -1651,11 +1992,44 @@ def _inventory_item_options(items: list[dict[str, str]]) -> list[dict[str, Any]]
         options.append(
             {
                 "key": key,
-                "label": f"{key}. {_short_inventory_label(label)}",
+                "label": f"{key} {_button_label_words(_short_inventory_label(label))}",
                 "item_label": label,
                 "actions": actions,
             }
         )
+    return options
+
+
+def _is_multi_picklist_screen(lines: list[str]) -> bool:
+    return any("Select:ENTER/SPC" in line for line in lines)
+
+
+def _multi_picklist_options(lines: list[str]) -> list[dict[str, Any]]:
+    options: list[dict[str, Any]] = []
+    selected_count = 0
+    for line in lines:
+        if _is_modal_ui_hint(line):
+            break
+        match = _MULTI_PICKLIST_OPTION_RE.match(line)
+        if match is None:
+            continue
+        key = match.group(1).lower()
+        label = _picklist_option_label(match.group("label"))
+        selected = match.group("selected") is not None
+        if selected:
+            selected_count += 1
+            label = f"Selected {label}"
+        if key and label and all(existing["key"] != key for existing in options):
+            options.append({"key": key, "label": label, "selected": selected})
+
+    if not options:
+        return []
+    if selected_count:
+        options.append({"key": _MULTI_PICKLIST_DONE_KEY, "label": "Finish sale"})
+    else:
+        options.append(_store_exit_option())
+    if selected_count:
+        options.append(_store_exit_option())
     return options
 
 
@@ -1769,6 +2143,34 @@ def _confirm_options(question: str) -> list[dict[str, str]]:
     return options
 
 
+def _yes_no_options() -> list[dict[str, str]]:
+    return [
+        {"key": "y", "label": _CONFIRM_LABELS["y"]},
+        {"key": "n", "label": _CONFIRM_LABELS["n"]},
+    ]
+
+
+def _invoice_confirm_options() -> list[dict[str, str]]:
+    return [
+        {"key": "y", "label": "Confirm sale"},
+        {"key": "n", "label": "Decline"},
+    ]
+
+
+def _store_exit_option() -> dict[str, str]:
+    return {"key": _PROMPT_EXIT_STORE_KEY, "label": "Exit Store"}
+
+
+def _number_prompt_options(default_value: int) -> list[dict[str, str]]:
+    return [
+        {"key": "0", "label": "Zero"},
+        {"key": "100", "label": "One Hundred"},
+        {"key": "500", "label": "Five Hundred"},
+        {"key": "1000", "label": "One Thousand"},
+        {"key": "max", "label": "Maximum"},
+    ]
+
+
 def _has_echoed_prompt_answer(question: str, options: list[dict[str, str]]) -> bool:
     allowed = {option["key"] for option in options if option.get("key")}
     answer = re.search(r"\s+([A-Za-z0-9])\s*$", question)
@@ -1793,24 +2195,48 @@ def _prompt_option_label(key: str, phrase: str) -> str:
 
 
 def _prompt_actions(options: list[dict[str, str]], kind: str = "") -> list[GameAction]:
+    actions: list[GameAction] = []
     if kind == _PROMPT_KIND_DIRECTION:
-        return []
+        return _system_prompt_actions()
     if kind == _PROMPT_KIND_INVENTORY:
         command_prefix = _INVENTORY_ITEM_COMMAND_PREFIX
     elif kind == _PROMPT_KIND_INVENTORY_ACTION:
         command_prefix = _INVENTORY_ACTION_COMMAND_PREFIX
+    elif kind == _PROMPT_KIND_MULTI_PICKLIST:
+        command_prefix = _MULTI_PICKLIST_COMMAND_PREFIX
     elif kind == _PROMPT_KIND_INDEXED_PICKLIST:
         command_prefix = _PICKLIST_COMMAND_PREFIX
+    elif kind == _PROMPT_KIND_NUMBER:
+        command_prefix = _NUMBER_COMMAND_PREFIX
     else:
         command_prefix = _PROMPT_COMMAND_PREFIX
+
+    for option in options:
+        if not option.get("key") or not option.get("label"):
+            continue
+        actions.append(
+            GameAction(
+                id=f"prompt_{option['key']}",
+                label=option["label"],
+                command=f"{command_prefix}{option['key']}",
+            )
+        )
+    actions.extend(_system_prompt_actions())
+    return actions
+
+
+def _system_prompt_actions() -> list[GameAction]:
     return [
         GameAction(
-            id=f"prompt_{option['key']}",
-            label=option["label"],
-            command=f"{command_prefix}{option['key']}",
-        )
-        for option in options
-        if option.get("key") and option.get("label")
+            id=f"prompt_{_PROMPT_CANCEL_KEY}",
+            label="Cancel",
+            command=f"{_PROMPT_COMMAND_PREFIX}{_PROMPT_CANCEL_KEY}",
+        ),
+        GameAction(
+            id=f"prompt_{_PROMPT_MENU_KEY}",
+            label="Main Menu",
+            command=f"{_PROMPT_COMMAND_PREFIX}{_PROMPT_MENU_KEY}",
+        ),
     ]
 
 

@@ -188,8 +188,8 @@ def test_game_keyboard_renders_status_only_inventory_items() -> None:
                 "question": "Choose an inventory item.",
                 "kind": "inventory",
                 "options": [
-                    {"key": "a", "label": "a. magic potion"},
-                    {"key": "b", "label": "b. scroll of create artifact"},
+                    {"key": "a", "label": "a magic potion"},
+                    {"key": "b", "label": "b scroll of create artifact"},
                 ],
             },
         },
@@ -198,8 +198,8 @@ def test_game_keyboard_renders_status_only_inventory_items() -> None:
     texts = _button_texts(game_keyboard(response))
     callback_data = _button_callback_data(game_keyboard(response))
 
-    assert "a. magic potion" in texts
-    assert "b. scroll of create artifact" in texts
+    assert "a magic potion" in texts
+    assert "b scroll of create artifact" in texts
     assert f"{CallbackData.GAME_PREFIX}invitem:a" in callback_data
     assert f"{CallbackData.GAME_PREFIX}invitem:b" in callback_data
 
@@ -228,6 +228,95 @@ def test_game_keyboard_renders_status_only_inventory_action_submenu() -> None:
     assert "Drop" in texts
     assert f"{CallbackData.GAME_PREFIX}inv:quaff:a" in callback_data
     assert f"{CallbackData.GAME_PREFIX}inv:drop:a" in callback_data
+
+
+def test_game_keyboard_renders_status_only_multi_picklist_actions() -> None:
+    response = GameResponse(
+        state={},
+        screen="Sell which item?\na.   a spear",
+        status={
+            "screen_type": "modal",
+            "pending_prompt": {
+                "question": "Sell which item?",
+                "kind": "multi_picklist",
+                "options": [
+                    {"key": "a", "label": "A spear", "selected": False},
+                    {"key": "done", "label": "Finish sale"},
+                    {"key": "exit_store", "label": "Exit Store"},
+                ],
+            },
+        },
+    )
+
+    texts = _button_texts(game_keyboard(response))
+    callback_data = _button_callback_data(game_keyboard(response))
+
+    assert "A spear" in texts
+    assert "Finish sale" in texts
+    assert "Exit Store" in texts
+    assert f"{CallbackData.GAME_PREFIX}multipick:a" in callback_data
+    assert f"{CallbackData.GAME_PREFIX}multipick:done" in callback_data
+    assert f"{CallbackData.GAME_PREFIX}multipick:exit_store" in callback_data
+
+
+def test_game_keyboard_renders_invoice_confirmation_actions() -> None:
+    response = GameResponse(
+        state={},
+        screen="You are selling the following items:\nContinue with sale?",
+        status={
+            "screen_type": "modal",
+            "pending_prompt": {
+                "question": "Continue with sale?",
+                "kind": "invoice_confirm",
+                "options": [
+                    {"key": "y", "label": "Confirm sale"},
+                    {"key": "n", "label": "Decline"},
+                ],
+            },
+        },
+    )
+
+    texts = _button_texts(game_keyboard(response))
+    callback_data = _button_callback_data(game_keyboard(response))
+
+    assert "Confirm sale" in texts
+    assert "Decline" in texts
+    assert f"{CallbackData.GAME_PREFIX}prompt:y" in callback_data
+    assert f"{CallbackData.GAME_PREFIX}prompt:n" in callback_data
+
+
+def test_game_keyboard_renders_status_only_number_prompt_actions() -> None:
+    response = GameResponse(
+        state={},
+        screen="How much do you want to pay? [900]",
+        status={
+            "pending_prompt": {
+                "question": "How much do you want to pay?",
+                "kind": "number_prompt",
+                "default": 900,
+                "max": 900,
+                "options": [
+                    {"key": "0", "label": "Zero"},
+                    {"key": "100", "label": "One Hundred"},
+                    {"key": "500", "label": "Five Hundred"},
+                    {"key": "1000", "label": "One Thousand"},
+                    {"key": "max", "label": "Maximum"},
+                ],
+            },
+        },
+    )
+
+    texts = _button_texts(game_keyboard(response))
+    callback_data = _button_callback_data(game_keyboard(response))
+
+    assert "Zero" in texts
+    assert "One Hundred" in texts
+    assert "Maximum" in texts
+    assert "Cancel" in texts
+    assert "Main Menu" in texts
+    assert f"{CallbackData.GAME_PREFIX}number:max" in callback_data
+    assert f"{CallbackData.GAME_PREFIX}prompt:cancel" in callback_data
+    assert f"{CallbackData.GAME_PREFIX}prompt:menu" in callback_data
 
 
 def test_game_keyboard_for_modal_prompt_omits_movement_controls() -> None:
