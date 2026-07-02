@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 from tglarn_bot.errors import SessionConflictError
 from tglarn_bot.services import GameSessionService
+from tglarn_bot.storage import _versioned_session_filter
 from tglarn_game import GameResponse, PlaceholderGameAdapter
 
 
@@ -142,6 +143,10 @@ class FakeSessionStore:
         }
         return self.session
 
+    async def get_session(self, telegram_user_id: int) -> dict[str, Any] | None:
+        self.calls.append(("get_session", {"telegram_user_id": telegram_user_id}))
+        return self.session
+
     async def set_map_view(
         self,
         telegram_user_id: int,
@@ -224,6 +229,10 @@ class CopyingSessionStore(FakeSessionStore):
         display_name: str | None = None,
     ) -> dict[str, Any]:
         self.ensure_count += 1
+        await asyncio.sleep(0)
+        return deepcopy(self.session)
+
+    async def get_session(self, telegram_user_id: int) -> dict[str, Any] | None:
         await asyncio.sleep(0)
         return deepcopy(self.session)
 
@@ -600,3 +609,31 @@ async def test_service_detects_stale_active_game_message() -> None:
 
     assert await service.active_game_message_matches(1001, 2002, 3003)
     assert not await service.active_game_message_matches(1001, 2002, 3004)
+
+
+@pytest.mark.asyncio
+async def test_service_validates_active_game_message_against_fresh_session() -> None:
+    store = CopyingSessionStore()
+    store.session["active_game_chat_id"] = 2002
+    store.session["active_game_message_id"] = 3003
+    service = GameSessionService(
+        store=store,
+        game_adapter=PlaceholderGameAdapter(),
+        default_map_view="wide",
+    )
+
+    await service.ensure_session(1001)
+    store.session["active_game_message_id"] = 4004
+
+    assert await service.active_game_message_matches(1001, 2002, 4004)
+    assert not await service.active_game_message_matches(1001, 2002, 3003)
+
+
+def test_versioned_session_filter_accepts_legacy_zero_version_documents() -> None:
+    assert _versioned_session_filter(1001, 0) == {
+        "telegram_user_id": 1001,
+        "$or": [
+            {"state_version": 0},
+            {"state_version": {"$exists": False}},
+        ],
+    }
