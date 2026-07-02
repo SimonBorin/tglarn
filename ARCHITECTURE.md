@@ -9,6 +9,7 @@
 - PTY bridge: `os.openpty`, terminal sizing, process groups, and controlled stdin/stdout interaction.
 - Runtime packaging: Podman, `Containerfile`, and `deploy/compose.yml`.
 - Validation: `pytest`, `pytest-asyncio`, and `ruff`.
+- Public Telegram entry point: [@tglarnbot](https://t.me/tglarnbot).
 
 # Architecture Overview
 
@@ -38,9 +39,10 @@ The ReLarn adapter treats each command as a controlled process cycle:
 4. Start the C binary as a subprocess in a separate process group.
 5. Send command bytes, including prompt answers, ESC, Enter, or numeric input.
 6. Capture and parse terminal output.
-7. Detect maps, prompts, modal screens, game-over screens, and save output.
-8. Return a `GameResponse` with new state, screen text, status, actions, and optional prompt metadata.
-9. Close PTY descriptors and terminate/reap the process group.
+7. Read the ReLarn turn-log export for complete same-turn event history, including duplicate combat messages that may scroll out of the visible terminal console.
+8. Detect maps, prompts, modal screens, game-over screens, and save output.
+9. Return a `GameResponse` with new state, screen text, status, actions, and optional prompt metadata.
+10. Close PTY descriptors and terminate/reap the process group.
 
 MongoDB stores the durable session boundary. A session contains the native ReLarn save blob, last rendered output, prompt metadata, map view, active Telegram message metadata, and `state_version`. This lets the bot recover after restarts and reject stale Telegram callbacks.
 
@@ -65,6 +67,10 @@ MongoDB stores the durable session boundary. A session contains the native ReLar
 5. Prompt handling as a state machine.
 
    ReLarn has many interactive terminal states: stores, bank prompts, tax prompts, object prompts, inventory menus, indexed picklists, lettered picklists, yes/no invoices, and multi-pick sale lists. The adapter records pending prompt metadata in `engine_state` so Telegram buttons answer the exact terminal state that produced them.
+
+6. Explicit turn-log export for combat transparency.
+
+   The curses console only displays the last six message lines. In Telegram, that can hide earlier same-turn events such as repeated monster hits before death. The C `say()` path now mirrors messages into a per-cycle turn-log file passed through `TGLARN_TURN_LOG_PATH`; the Python adapter reads this file before issuing the save command and uses it as the authoritative player-facing log for map and game-over responses.
 
 # AI Tooling & Agent Workflow
 
@@ -94,4 +100,4 @@ Workflow:
 
 5. Test Expansion.
 
-   Every major adapter state gained regression coverage. The repository now contains 136 tests spanning keyboards, rendering, image generation, ReLarn prompt parsing, service persistence, stale callbacks, optimistic locking, and error boundaries.
+   Every major adapter state gained regression coverage. The repository now contains 140 tests spanning keyboards, rendering, image generation, ReLarn prompt parsing, service persistence, stale callbacks, optimistic locking, error boundaries, and combat log transparency.
