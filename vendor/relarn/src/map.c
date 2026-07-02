@@ -2,7 +2,7 @@
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 /*
  * Modified for the tglarn Telegram Bot project in 2026.
- * Nature of modification: Replaced recursive maze carver with randomized room-first generator and strict flood-fill connectivity validation.
+ * Nature of modification: Replaced recursive maze carver with randomized room-first generator, strict flood-fill connectivity validation, and early-level closed-door restrictions.
  */
 
 
@@ -624,6 +624,15 @@ connect_all_accessible_tiles(void) {
     return connect_all_accessible_tiles_from(start_x, start_y);
 }
 
+static struct Object
+generated_door_for_level(int lev, enum DOORTRAP_RISK risk) {
+    if (lev > 0 && lev <= 3) {
+        return NULL_OBJ;
+    }
+
+    return door(risk);
+}
+
 static void
 sort_rooms_by_center_x(struct MicroRoom rooms[], int room_count) {
     for (int i = 1; i < room_count; i++) {
@@ -950,7 +959,7 @@ cannedlevel(int lev) {
                 nob = obj(OWALL, 0);
                 break;
             case 'D':
-                nob = door(DTO_LOW);
+                nob = generated_door_for_level(lev, DTO_LOW);
                 break;
             case '~':
                 if (lev!=DBOTTOM)
@@ -1032,13 +1041,13 @@ troom(int lv, int xsize, int ysize, int tx, int ty, enum DOORTRAP_RISK dtr) {
         i = tx + rund (xsize);
         j = ty + (ysize-1) * rund(2);
 
-        at(i, j)->obj = door(dtr);  /* on horizontal walls */
+        at(i, j)->obj = generated_door_for_level(lv, dtr);  /* on horizontal walls */
         break;
     case 2:
         i = tx + (xsize-1)*rund(2);
         j = ty + rund (ysize);
 
-        at(i, j)->obj = door(dtr); /* on vertical walls */
+        at(i, j)->obj = generated_door_for_level(lv, dtr); /* on vertical walls */
         break;
     }
 
