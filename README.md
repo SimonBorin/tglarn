@@ -11,11 +11,9 @@ The project keeps the legacy engine and the new integration code deliberately se
 
 The AI-native team model was explicit:
 
-- Product Owner / Tech Lead: User, responsible for product scope, architectural boundaries, feature requests, and final review.
+- Product Owner / Tech Lead: Simon.A.Borin, responsible for product scope, architectural boundaries, feature requests, and final review.
 - Prompt Engineer / AI Strategist: Gemini, responsible for high-level system design, state-machine audit prompts, and implementation planning.
 - Core Developer / Test Architect: Codex, responsible for implementation, concurrency control, PTY lifecycle management, process cleanup, and the automated test suite.
-
-Pillow is a major architectural choice. The original C engine outputs complex, colorful ANSI terminal grids. Telegram Markdown and HTML rendering are volatile across mobile, desktop, and web clients, and cannot reliably preserve multi-colored monospace terminal layouts. `tglarn` therefore captures terminal state and rasterizes map and modal output into clean PNG images with Pillow, preserving the intended retro visual experience without depending on client-side text layout behavior.
 
 # Game Description
 
@@ -25,13 +23,17 @@ The game remains turn-based and command-driven. Movement, inventory actions, spe
 
 # Screenshots
 
-Screenshot placeholders for rendered Telegram UI:
+Rendered dungeon map:
 
-```markdown
 ![Rendered dungeon map](docs/screenshots/tglarn-map-render.png)
+
+Store prompt inline keyboard:
+
 ![Store prompt inline keyboard](docs/screenshots/tglarn-store-prompt.png)
+
+Game-over credits screen:
+
 ![Game-over credits screen](docs/screenshots/tglarn-game-over.png)
-```
 
 # Setup & Run Instructions
 

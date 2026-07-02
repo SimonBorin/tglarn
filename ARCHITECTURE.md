@@ -56,7 +56,7 @@ MongoDB stores the durable session boundary. A session contains the native ReLar
 
 3. Pillow-based visual engine for cross-platform ANSI grid rendering.
 
-   The original C engine outputs colorful ANSI/curses grids. Telegram Markdown and HTML cannot guarantee stable colored monospace layout across mobile and desktop clients. Pillow rasterizes the captured terminal buffer into clean PNG images so walls, floors, monsters, player position, modal screens, and game-over text keep a consistent retro presentation.
+   The original C engine outputs complex, colorful ANSI/curses terminal grids. Telegram native text parsers, including Markdown and HTML modes, are volatile across mobile, desktop, and web clients and cannot reliably render multi-colored monospace grids without breaking layout. Pillow is therefore used as a visual compatibility layer: the adapter captures terminal state and rasterizes map and modal output into clean PNG images, preserving the retro display intended by the original game while avoiding client-specific text rendering failures.
 
 4. Explicit PTY and process lifecycle ownership.
 

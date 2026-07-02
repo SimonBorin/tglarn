@@ -48,15 +48,9 @@ The imported ReLarn source under `vendor/relarn/` is upstream third-party code a
 
 # Time Spent
 
-Exact git-history development window: 3 days, 11 hours, 51 minutes, and 41 seconds.
+Estimated development window: approximately 4 days.
 
-The value was calculated from the current git log:
-
-- First commit: `2026-06-26T12:24:58+02:00`, `Chore: first commit`.
-- Latest commit: `2026-06-30T00:16:39+02:00`, `fix: add bank and dnd store prompts`.
-- Commit count at analysis time: 44 commits.
-
-This measures the elapsed time between the first and latest committed repository revisions, as requested by the challenge documentation prompt.
+The project is still in active development, so this is a rounded working estimate rather than a final accounting. Earlier drafts computed a precise commit-log delta, but the submission narrative is clearer with a practical day-level estimate.
 
 # Key Lessons for the Organization
 
