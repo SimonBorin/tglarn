@@ -44,6 +44,7 @@ class CallbackData:
     RESTART_CONFIRM = "restart:confirm"
     RESTART_CANCEL = "restart:cancel"
     CHARACTER_INTRO = "character:intro"
+    CHARACTER_CLASS_GUIDE = "character:class_guide"
     CHARACTER_CLASS_PREFIX = "character:class:"
     CHARACTER_GENDER_PREFIX = "character:gender:"
     VIEW_MEDIUM = "view:medium"
@@ -96,8 +97,30 @@ def character_class_keyboard() -> InlineKeyboardMarkup:
                 for label, class_id in CHARACTER_CLASSES[index : index + 2]
             ]
         )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="Class Guide",
+                callback_data=CallbackData.CHARACTER_CLASS_GUIDE,
+            )
+        ]
+    )
     rows.append([InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.MAIN_MENU)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def character_class_guide_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Back to Classes",
+                    callback_data=CallbackData.CHARACTER_INTRO,
+                )
+            ],
+            [InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.MAIN_MENU)],
+        ]
+    )
 
 
 def character_gender_keyboard(class_id: str) -> InlineKeyboardMarkup:
