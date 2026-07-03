@@ -2,9 +2,15 @@
 
 `tglarn` is a Telegram bot adaptation of the ReLarn/Larn roguelike engine. It wraps the original C game, preserved under `vendor/relarn/`, with a Python Telegram adapter that translates terminal-driven gameplay into direct-chat messages, contextual inline buttons, and rendered game images.
 
-## Play the Live Bot
+## Play Online
 
-Play the public Telegram build here: [@tglarnbot](https://t.me/tglarnbot).
+Hosted browser demo: [tglarn GitLab Pages](http://simon-borin-tglarn-4ed438.pages.git.ringcentral.com).
+
+Live Telegram bot: [@tglarnbot](https://t.me/tglarnbot).
+
+The GitLab Pages build is a static, browser-playable project demonstration with
+an interactive replay of the Telegram UI. The production game runs in Telegram,
+where each player gets a persistent ReLarn C-engine session.
 
 Scan this QR code or open the handle directly:
 
@@ -15,7 +21,7 @@ The project keeps the legacy engine and the new integration code deliberately se
 - `vendor/relarn/` contains the upstream C ReLarn source and assets.
 - `game/tglarn_game/` contains the Python game adapter boundary, including the ReLarn subprocess and PTY bridge.
 - `bot/tglarn_bot/` contains aiogram handlers, keyboards, rendering, persistence services, and Telegram-specific UX.
-- `tests/` contains the 140-test suite covering the adapter, keyboards, rendering, process prompts, session service, and error boundaries.
+- `tests/` contains the 144-test suite covering the adapter, keyboards, rendering, process prompts, session service, and error boundaries.
 
 The AI-native team model was explicit:
 
@@ -124,7 +130,7 @@ Run linting and the full test suite:
 .venv/bin/python -m pytest
 ```
 
-The repository currently contains 140 tests. They cover menu keyboards, text rendering, Pillow image rendering, placeholder gameplay, ReLarn prompt detection, inventory flows, store invoices, number prompts, stale button rejection, optimistic locking, adapter error boundaries, combat log transparency, and session isolation.
+The repository currently contains 144 tests. They cover menu keyboards, text rendering, Pillow image rendering, placeholder gameplay, ReLarn prompt detection, inventory flows, store invoices, number prompts, stale button rejection, optimistic locking, adapter error boundaries, combat log transparency, and session isolation.
 
 # Licensing & Credits
 
