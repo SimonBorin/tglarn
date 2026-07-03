@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="tglarn is a Telegram bot adaptation of the classic Larn/ReLarn roguelike C engine."
+    />
+    <title>tglarn | Play Larn in Telegram</title>
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Classic UNIX roguelike, modern Telegram UI</p>
+          <h1>Play tglarn in Telegram</h1>
+          <p class="lead">
+            tglarn wraps the ReLarn/Larn C engine in a Telegram bot with rendered
+            terminal maps, contextual inline controls, persistent sessions, and
+            multiplayer-safe isolation.
+          </p>
+          <div class="cta-row">
+            <a class="primary-action" href="https://t.me/tglarnbot">Open @tglarnbot</a>
+            <a class="secondary-action" href="#mock-replay">View demo replay</a>
+          </div>
+        </div>
+        <aside class="qr-panel" aria-label="Telegram bot QR code">
+          <img src="screenshots/tglarn-bot-qr.png" alt="QR code for @tglarnbot" />
+          <p>Scan or open the bot directly in Telegram.</p>
+        </aside>
+      </section>
+
+      <section class="demo-video" aria-labelledby="video-title">
+        <div>
+          <p class="eyebrow">Recorded gameplay</p>
+          <h2 id="video-title">A real Telegram session preview</h2>
+          <p>
+            The video shows the actual bot interface. The live game runs in Telegram,
+            while this static page provides a web-accessible demonstration for review.
+          </p>
+        </div>
+        <video controls playsinline preload="metadata" poster="screenshots/tglarn-map-render.png">
+          <source src="assets/tglarn-demo.mp4" type="video/mp4" />
+          Your browser cannot play this video. Open @tglarnbot in Telegram to try the game.
+        </video>
+      </section>
+
+      <section class="features" aria-labelledby="features-title">
+        <div class="section-heading">
+          <p class="eyebrow">Architecture highlights</p>
+          <h2 id="features-title">Legacy terminal engine, Telegram-native experience</h2>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <h3>C engine via PTY</h3>
+            <p>
+              Each player session drives the original ReLarn binary through a protected
+              subprocess and pseudo-terminal adapter.
+            </p>
+          </article>
+          <article>
+            <h3>Inline UI state machine</h3>
+            <p>
+              Terminal prompts, shops, inventories, numeric inputs, and confirmations are
+              translated into Telegram inline keyboards.
+            </p>
+          </article>
+          <article>
+            <h3>Rendered retro maps</h3>
+            <p>
+              ANSI terminal output is rasterized into stable images so the grid remains
+              readable across Telegram clients.
+            </p>
+          </article>
+          <article>
+            <h3>Persistent sessions</h3>
+            <p>
+              MongoDB stores serialized engine state per chat, with optimistic locking to
+              reject stale button callbacks.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="mock-section" id="mock-replay" aria-labelledby="mock-title">
+        <div class="section-heading">
+          <p class="eyebrow">Interactive mock replay</p>
+          <h2 id="mock-title">Preview the Telegram flow</h2>
+          <p>
+            This is a static client-side replay. The frames below are PNG images
+            generated with the same Pillow rendering path used by the Telegram bot.
+          </p>
+        </div>
+
+        <div class="mock-layout">
+          <section class="telegram-shell" aria-live="polite">
+            <header class="telegram-header">
+              <img src="screenshots/tglarn-bot-qr.png" alt="" />
+              <div>
+                <strong>tgLarn</strong>
+                <span>bot</span>
+              </div>
+            </header>
+            <div class="chat-message">
+              <h3 id="mock-state-title">Welcome</h3>
+              <p id="mock-state-body"></p>
+              <figure class="mock-render-frame">
+                <img
+                  id="mock-state-image"
+                  src="assets/replay-welcome.png"
+                  alt="Pillow-rendered tglarn welcome screen"
+                />
+                <figcaption id="mock-state-caption">
+                  Pillow-rendered Telegram game frame
+                </figcaption>
+              </figure>
+              <div class="mock-log">
+                <strong>Log</strong>
+                <ul id="mock-log-list"></ul>
+              </div>
+            </div>
+            <div id="mock-inline-keyboard" class="mock-inline-keyboard"></div>
+          </section>
+
+          <aside class="control-pad" aria-label="Mock replay controls">
+            <h3>Replay controls</h3>
+            <button type="button" data-state="0">Welcome</button>
+            <button type="button" data-state="1">Class Guide</button>
+            <button type="button" data-state="2">Dungeon Map</button>
+            <button type="button" data-state="3">Store Prompt</button>
+            <button type="button" data-state="0">Restart</button>
+            <a href="https://t.me/tglarnbot">Open the real bot</a>
+          </aside>
+        </div>
+      </section>
+
+      <section class="transparency" aria-labelledby="browser-title">
+        <div>
+          <p class="eyebrow">Deployment note</p>
+          <h2 id="browser-title">Why not playable directly in the browser?</h2>
+        </div>
+        <p>
+          tglarn keeps dedicated per-user ReLarn C subprocess sessions on EC2 and
+          persists state through MongoDB. That runtime model depends on secure server-side
+          process management, PTY I/O, and Telegram callback validation. GitLab Pages is a
+          static hosting environment, so this page serves as a high-fidelity preview and a
+          direct entry point to the production Telegram bot.
+        </p>
+      </section>
+    </main>
+    <script src="script.js"></script>
+  </body>
+</html>
