@@ -89,7 +89,7 @@ const states = [
   },
 ];
 
-let currentState = 0;
+let currentState = null;
 
 const titleNode = document.querySelector("#mock-state-title");
 const bodyNode = document.querySelector("#mock-state-body");
@@ -100,7 +100,15 @@ const keyboardNode = document.querySelector("#mock-inline-keyboard");
 const controlButtons = document.querySelectorAll(".control-pad button");
 
 function renderState(index) {
-  currentState = (index + states.length) % states.length;
+  if (!Number.isInteger(index) || index < 0 || index >= states.length) {
+    return;
+  }
+
+  if (currentState === index) {
+    return;
+  }
+
+  currentState = index;
   const state = states[currentState];
 
   titleNode.textContent = state.title;
@@ -139,12 +147,7 @@ function renderState(index) {
 for (const button of controlButtons) {
   button.addEventListener("click", () => {
     const explicitState = button.dataset.state;
-    if (explicitState !== undefined) {
-      renderState(Number.parseInt(explicitState, 10));
-      return;
-    }
-
-    renderState(currentState + 1);
+    renderState(Number.parseInt(explicitState, 10));
   });
 }
 
