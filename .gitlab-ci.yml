@@ -15,6 +15,7 @@ stages:
   - before-run
   - test
   - build
+  - deploy
 
 default:
   tags:
@@ -158,4 +159,23 @@ Build Docker Artifact:
     expire_in: 1 week
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
+    - when: never
+
+pages:
+  stage: deploy
+  tags:
+    - rc-ai-learning
+  image:
+    name: alpine:3.20
+    entrypoint: [""]
+  script:
+    - mkdir -p public
+    - cp -R docs/pages/* public/
+    - mkdir -p public/screenshots
+    - cp -R docs/screenshots/* public/screenshots/ || true
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
     - when: never
