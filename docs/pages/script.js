@@ -6,7 +6,10 @@ const states = [
     alt: "Pillow-rendered welcome screen for the tglarn Telegram bot",
     caption: "Text prompt rendered by Pillow from a terminal-style screen.",
     log: ["Choose who will enter the dungeon."],
-    keyboard: [["Play Game"], ["Main Menu"]],
+    keyboard: [
+      [{ label: "Play Game", target: 1 }],
+      [{ label: "Main Menu", target: 0 }],
+    ],
   },
   {
     title: "Create Character",
@@ -16,10 +19,22 @@ const states = [
     caption: "Class guidance rendered as a bot text screen.",
     log: ["Class Guide is available before committing to a run."],
     keyboard: [
-      ["Ogre", "Wizard"],
-      ["Klingon", "Elf"],
-      ["Rogue", "Geek"],
-      ["Dwarf", "Rambo"],
+      [
+        { label: "Ogre", target: 2 },
+        { label: "Wizard", target: 2 },
+      ],
+      [
+        { label: "Klingon", target: 2 },
+        { label: "Elf", target: 2 },
+      ],
+      [
+        { label: "Rogue", target: 2 },
+        { label: "Geek", target: 2 },
+      ],
+      [
+        { label: "Dwarf", target: 2 },
+        { label: "Rambo", target: 2 },
+      ],
     ],
   },
   {
@@ -34,10 +49,25 @@ const states = [
       "Context buttons update after every turn.",
     ],
     keyboard: [
-      ["NW", "N", "NE"],
-      ["W", "Inspect", "E"],
-      ["SW", "S", "SE"],
-      ["Spell", "Menu"],
+      [
+        { label: "NW", target: 2 },
+        { label: "N", target: 2 },
+        { label: "NE", target: 2 },
+      ],
+      [
+        { label: "W", target: 2 },
+        { label: "Inspect", target: 2 },
+        { label: "E", target: 2 },
+      ],
+      [
+        { label: "SW", target: 2 },
+        { label: "S", target: 2 },
+        { label: "SE", target: 2 },
+      ],
+      [
+        { label: "Spell", target: 2 },
+        { label: "Menu", target: 3 },
+      ],
     ],
   },
   {
@@ -50,7 +80,12 @@ const states = [
       "The C engine is waiting for a store command.",
       "The adapter maps that prompt into inline buttons.",
     ],
-    keyboard: [["Buy spear"], ["Sell item"], ["Exit Store"], ["Main Menu"]],
+    keyboard: [
+      [{ label: "Buy spear", target: 3 }],
+      [{ label: "Sell item", target: 3 }],
+      [{ label: "Exit Store", target: 2 }],
+      [{ label: "Main Menu", target: 0 }],
+    ],
   },
 ];
 
@@ -88,11 +123,11 @@ function renderState(index) {
       rowNode.className = "mock-keyboard-row";
       rowNode.style.setProperty("--cols", row.length);
 
-      for (const label of row) {
+      for (const item of row) {
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = label;
-        button.addEventListener("click", () => renderState(currentState + 1));
+        button.textContent = item.label;
+        button.addEventListener("click", () => renderState(item.target));
         rowNode.append(button);
       }
 
