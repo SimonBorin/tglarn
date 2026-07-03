@@ -276,17 +276,22 @@ a {
   color: #dce7f0;
 }
 
-.chat-message pre {
-  overflow-x: auto;
+.mock-render-frame {
   margin: 0 0 14px;
-  padding: 14px;
+}
+
+.mock-render-frame img {
+  display: block;
+  width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   background: #0a0f14;
-  color: #f7f1d0;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: clamp(0.76rem, 2.2vw, 0.94rem);
-  line-height: 1.25;
+}
+
+.mock-render-frame figcaption {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .mock-log strong {

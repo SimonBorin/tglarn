@@ -89,8 +89,8 @@
           <p class="eyebrow">Interactive mock replay</p>
           <h2 id="mock-title">Preview the Telegram flow</h2>
           <p>
-            This is a static client-side replay. Click the controls to switch between
-            representative bot states without any backend calls.
+            This is a static client-side replay. The frames below are PNG images
+            generated with the same Pillow rendering path used by the Telegram bot.
           </p>
         </div>
 
@@ -106,7 +106,16 @@
             <div class="chat-message">
               <h3 id="mock-state-title">Welcome</h3>
               <p id="mock-state-body"></p>
-              <pre id="mock-map" aria-label="Mock terminal output"></pre>
+              <figure class="mock-render-frame">
+                <img
+                  id="mock-state-image"
+                  src="assets/replay-welcome.png"
+                  alt="Pillow-rendered tglarn welcome screen"
+                />
+                <figcaption id="mock-state-caption">
+                  Pillow-rendered Telegram game frame
+                </figcaption>
+              </figure>
               <div class="mock-log">
                 <strong>Log</strong>
                 <ul id="mock-log-list"></ul>

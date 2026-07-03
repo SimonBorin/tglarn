@@ -2,24 +2,18 @@ const states = [
   {
     title: "Welcome to tglarn",
     body: "A Telegram wrapper around the classic Larn/ReLarn roguelike engine.",
-    map: [
-      "Before the Caverns",
-      "",
-      "Your child is dying from dianthroritis.",
-      "Find the cure in the Caverns of Larn before time runs out.",
-    ].join("\n"),
+    image: "assets/replay-welcome.png",
+    alt: "Pillow-rendered welcome screen for the tglarn Telegram bot",
+    caption: "Text prompt rendered by Pillow from a terminal-style screen.",
     log: ["Choose who will enter the dungeon."],
     keyboard: [["Play Game"], ["Main Menu"]],
   },
   {
     title: "Create Character",
     body: "Each class starts with different stats, gear, and spell access.",
-    map: [
-      "Recommended starts: Geek, Dwarf, or Rogue.",
-      "Rambo is a challenge class.",
-      "",
-      "Elf starts with protection and leather, but no weapon.",
-    ].join("\n"),
+    image: "assets/replay-class-guide.png",
+    alt: "Pillow-rendered class guide screen for tglarn",
+    caption: "Class guidance rendered as a bot text screen.",
     log: ["Class Guide is available before committing to a run."],
     keyboard: [
       ["Ogre", "Wizard"],
@@ -31,15 +25,9 @@ const states = [
   {
     title: "Dungeon Level 1",
     body: "The terminal grid is rendered as a stable image in the real bot.",
-    map: [
-      "#############",
-      "#.....#.....#",
-      "#..@..#..G..#",
-      "#.....O.....#",
-      "###.#####.###",
-      "#.....*.....#",
-      "#############",
-    ].join("\n"),
+    image: "assets/replay-map.png",
+    alt: "Pillow-rendered dungeon map with player, monsters, items, walls, and doors",
+    caption: "Map snapshot rendered with the real tile colors and grid style.",
     log: [
       "You enter the caverns.",
       "A gnome waits in the next chamber.",
@@ -55,15 +43,9 @@ const states = [
   {
     title: "Store Prompt",
     body: "Classic terminal prompts become explicit Telegram actions.",
-    map: [
-      "DND Store",
-      "",
-      "a. leather armor",
-      "b. spear",
-      "c. potion of healing",
-      "",
-      "Select an item or exit the store.",
-    ].join("\n"),
+    image: "assets/replay-store.png",
+    alt: "Pillow-rendered DND Store prompt for tglarn",
+    caption: "Store prompt rendered as a terminal text screen.",
     log: [
       "The C engine is waiting for a store command.",
       "The adapter maps that prompt into inline buttons.",
@@ -76,7 +58,8 @@ let currentState = 0;
 
 const titleNode = document.querySelector("#mock-state-title");
 const bodyNode = document.querySelector("#mock-state-body");
-const mapNode = document.querySelector("#mock-map");
+const imageNode = document.querySelector("#mock-state-image");
+const captionNode = document.querySelector("#mock-state-caption");
 const logNode = document.querySelector("#mock-log-list");
 const keyboardNode = document.querySelector("#mock-inline-keyboard");
 const controlButtons = document.querySelectorAll(".control-pad button");
@@ -87,7 +70,9 @@ function renderState(index) {
 
   titleNode.textContent = state.title;
   bodyNode.textContent = state.body;
-  mapNode.textContent = state.map;
+  imageNode.src = state.image;
+  imageNode.alt = state.alt;
+  captionNode.textContent = state.caption;
 
   logNode.replaceChildren(
     ...state.log.map((line) => {
