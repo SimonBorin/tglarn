@@ -6,6 +6,13 @@ on:
       - main
     types:
       - closed
+    paths:
+      - .dockerignore
+      - Containerfile
+      - pyproject.toml
+      - bot/**
+      - game/**
+      - vendor/relarn/**
   workflow_dispatch:
     inputs:
       bump:
