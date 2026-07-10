@@ -759,14 +759,11 @@ section[id] {
   padding: clamp(16px, 3vw, 36px);
 }
 
-.shot-store .shot-open img {
-  object-fit: cover;
-  object-position: center;
-}
-
+.shot-store .shot-open img,
 .shot-gameover .shot-open img {
-  object-fit: cover;
-  object-position: center top;
+  padding: clamp(12px, 1.5vw, 20px);
+  object-fit: contain;
+  object-position: center;
 }
 
 .shot-open:hover img {
