@@ -23,6 +23,32 @@ The project keeps the legacy engine and the new integration code deliberately se
 - `bot/tglarn_bot/` contains aiogram handlers, keyboards, rendering, persistence services, and Telegram-specific UX.
 - `tests/` contains the 144-test suite covering the adapter, keyboards, rendering, process prompts, session service, and error boundaries.
 
+## Repository Scale & Complexity
+
+Current repository snapshot:
+
+| Slice | Files | Code LOC | C `.c` | C headers `.h` | C family | Python |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Whole repository | 203 | ~41.5k | 11,392 | 1,932 | 13,324 | 7,133 |
+| Without `vendor/relarn` | 70 | ~9.6k | 0 | 0 | 0 | 7,133 |
+| Only `vendor/relarn` | 133 | ~31.9k | 11,392 | 1,932 | 13,324 | 0 |
+
+If only C-family code and Python code are compared:
+
+- C-family: 13,324 LOC, 65.1%.
+- Python: 7,133 LOC, 34.9%.
+
+The repository is not large by raw line count, but the integration complexity is
+substantial because it combines:
+
+- a legacy C roguelike engine;
+- a Python layer that drives the C engine through subprocesses and PTYs;
+- a terminal capture and rendering adapter;
+- Telegram bot handlers and an inline UI state machine;
+- persistence and session logic;
+- Docker, deployment, and CI wiring;
+- tests around the process boundary, prompts, sessions, and rendering.
+
 The AI-native team model was explicit:
 
 - Product Owner / Tech Lead: Simon.A.Borin, responsible for product scope, architectural boundaries, feature requests, and final review.

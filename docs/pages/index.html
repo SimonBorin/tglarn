@@ -640,11 +640,76 @@
             GitLab Pages is a static hosting environment, so this page serves as a
             high-fidelity preview and a direct entry point to the production Telegram bot.
           </p>
+          <div class="repo-metrics">
+            <h3>Repository scale and complexity</h3>
+            <div class="repo-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Slice</th>
+                    <th>Files</th>
+                    <th>Code LOC</th>
+                    <th>C .c</th>
+                    <th>C headers .h</th>
+                    <th>C family</th>
+                    <th>Python</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Whole repository</td>
+                    <td>203</td>
+                    <td>~41.5k</td>
+                    <td>11,392</td>
+                    <td>1,932</td>
+                    <td>13,324</td>
+                    <td>7,133</td>
+                  </tr>
+                  <tr>
+                    <td>Without vendor/relarn</td>
+                    <td>70</td>
+                    <td>~9.6k</td>
+                    <td>0</td>
+                    <td>0</td>
+                    <td>0</td>
+                    <td>7,133</td>
+                  </tr>
+                  <tr>
+                    <td>Only vendor/relarn</td>
+                    <td>133</td>
+                    <td>~31.9k</td>
+                    <td>11,392</td>
+                    <td>1,932</td>
+                    <td>13,324</td>
+                    <td>0</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>If only C-family code and Python code are compared:</p>
+            <ul>
+              <li>C-family: 13,324 LOC, 65.1%.</li>
+              <li>Python: 7,133 LOC, 34.9%.</li>
+            </ul>
+            <p>
+              The repository is not large by raw line count, but the integration
+              complexity is substantial because it combines:
+            </p>
+            <ul>
+              <li>a legacy C roguelike engine;</li>
+              <li>a Python layer that drives the C engine through subprocesses and PTYs;</li>
+              <li>a terminal capture and rendering adapter;</li>
+              <li>Telegram bot handlers and an inline UI state machine;</li>
+              <li>persistence and session logic;</li>
+              <li>Docker, deployment, and CI wiring;</li>
+              <li>tests around the process boundary, prompts, sessions, and rendering.</li>
+            </ul>
+          </div>
           <p>
             Leadership demands a playable GitLab Pages build. Fine. On top of a
             genuinely complex, large, and interesting project, I am placing a clicker.
           </p>
-          <p>
+          <p class="deployment-rules">
             The rules are simple: if the screen shows an alert, hit ESCALADE before time
             runs out. If it is not an alert, keep your hands off the button. Every correct
             escalation scores points. A bad click or a late click ends the run. Enjoy.

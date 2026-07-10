@@ -373,15 +373,67 @@ a {
 
 .deployment-copy p {
   margin-bottom: 0;
-}
-
-.deployment-copy p:first-child,
-.deployment-copy p:nth-child(2) {
-  margin-bottom: 0;
   color: #d7e3ec;
 }
 
-.deployment-copy p:last-child {
+.repo-metrics {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(84, 199, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(8, 16, 25, 0.46);
+}
+
+.repo-metrics h3 {
+  margin-bottom: 0;
+}
+
+.repo-metrics p,
+.repo-metrics ul {
+  margin: 0;
+  color: #d7e3ec;
+}
+
+.repo-metrics ul {
+  padding-left: 18px;
+}
+
+.repo-table-wrap {
+  overflow-x: auto;
+}
+
+.repo-metrics table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  color: #d7e3ec;
+  font-size: 0.88rem;
+}
+
+.repo-metrics th,
+.repo-metrics td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.repo-metrics th:first-child,
+.repo-metrics td:first-child {
+  text-align: left;
+}
+
+.repo-metrics th {
+  color: var(--accent-strong);
+  font-weight: 760;
+}
+
+.repo-metrics td {
+  font-variant-numeric: tabular-nums;
+}
+
+.deployment-rules {
   color: var(--warning);
   font-weight: 720;
 }
