@@ -366,9 +366,24 @@ a {
   align-items: start;
 }
 
-.transparency p:last-child {
+.deployment-copy {
+  display: grid;
+  gap: 12px;
+}
+
+.deployment-copy p {
+  margin-bottom: 0;
+}
+
+.deployment-copy p:first-child,
+.deployment-copy p:nth-child(2) {
   margin-bottom: 0;
   color: #d7e3ec;
+}
+
+.deployment-copy p:last-child {
+  color: var(--warning);
+  font-weight: 720;
 }
 
 @media (max-width: 920px) {

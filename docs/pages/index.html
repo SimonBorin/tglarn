@@ -13,8 +13,495 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="style.css" />
+    <link
+      rel="preload"
+      as="image"
+      href="assets/Gemini_Generated_Image_wla3s5wla3s5wla3 (1).png?v=2"
+    />
+    <link
+      rel="preload"
+      as="image"
+      href="assets/Gemini_Generated_Image_j95wajj95wajj95.png?v=2"
+    />
+    <style>
+      /* Embedded IT monitoring clicker component. */
+      #it-console-clicker {
+        --screen-left: 38.28%;
+        --screen-top: 20.7%;
+        --screen-width: 25.07%;
+        --screen-height: 35.68%;
+        --button-left: 44.75%;
+        --button-top: 66.85%;
+        --button-width: 11.7%;
+        --button-height: 18.1%;
+        position: relative;
+        z-index: 10;
+        width: 100%;
+        margin: 0;
+        padding: clamp(10px, 1.8vw, 22px);
+        border-bottom: 1px solid rgba(120, 255, 170, 0.16);
+        background:
+          radial-gradient(circle at 18% 12%, rgba(42, 171, 238, 0.22), transparent 34rem),
+          radial-gradient(circle at 82% 10%, rgba(101, 209, 140, 0.14), transparent 28rem),
+          linear-gradient(135deg, #081019 0%, var(--bg, #0b1117) 46%, #101820 100%);
+      }
+
+      #it-console-clicker,
+      #it-console-clicker * {
+        box-sizing: border-box;
+      }
+
+      #it-console-clicker .console-shell {
+        position: relative;
+        width: min(100%, 1320px);
+        aspect-ratio: 2816 / 1536;
+        margin: 0 auto;
+        overflow: hidden;
+        border: 1px solid rgba(133, 233, 169, 0.2);
+        border-radius: 8px;
+        background-image: url("assets/Gemini_Generated_Image_wla3s5wla3s5wla3 (1).png?v=2");
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: cover;
+        box-shadow: 0 22px 80px rgba(0, 0, 0, 0.45);
+      }
+
+      #it-console-clicker .console-shell.is-pressed {
+        background-image: url("assets/Gemini_Generated_Image_j95wajj95wajj95.png?v=2");
+      }
+
+      #it-console-clicker .console-dimmer {
+        position: absolute;
+        inset: 0;
+        z-index: 3;
+        pointer-events: none;
+        background: rgba(0, 0, 0, 0.58);
+        opacity: 0;
+        transition: opacity 120ms linear;
+      }
+
+      #it-console-clicker .console-shell.is-start .console-dimmer,
+      #it-console-clicker .console-shell.is-game-over .console-dimmer {
+        opacity: 1;
+      }
+
+      #it-console-clicker .monitor-screen {
+        position: absolute;
+        left: var(--screen-left);
+        top: var(--screen-top);
+        z-index: 5;
+        display: grid;
+        place-items: center;
+        width: var(--screen-width);
+        height: var(--screen-height);
+        padding: clamp(7px, 1.9vw, 30px);
+        overflow: hidden;
+        border-radius: 13% / 18%;
+        background: transparent;
+        color: #9eff9d;
+        font-family: "Courier New", Courier, monospace;
+        text-align: center;
+        text-shadow:
+          0 0 5px rgba(130, 255, 151, 0.95),
+          0 0 13px rgba(65, 255, 112, 0.58);
+        text-transform: uppercase;
+      }
+
+      #it-console-clicker .monitor-screen::after {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        content: "";
+        background:
+          repeating-linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0.08) 0,
+            rgba(255, 255, 255, 0.08) 1px,
+            transparent 1px,
+            transparent 5px
+          );
+        mix-blend-mode: screen;
+        opacity: 0.24;
+      }
+
+      #it-console-clicker .monitor-alert {
+        position: relative;
+        z-index: 3;
+        width: 100%;
+        max-height: 100%;
+        overflow: hidden;
+        color: #9eff9d;
+        font-size: clamp(0.78rem, 2.15vw, 2.2rem);
+        font-weight: 800;
+        line-height: 1.08;
+        letter-spacing: 0;
+        overflow-wrap: anywhere;
+      }
+
+      #it-console-clicker .monitor-alert[data-kind="non-alert"] {
+        color: #73f5a2;
+      }
+
+      #it-console-clicker .monitor-alert[hidden],
+      #it-console-clicker .monitor-game-over[hidden],
+      #it-console-clicker .start-overlay[hidden] {
+        display: none;
+      }
+
+      #it-console-clicker .monitor-game-over {
+        position: relative;
+        z-index: 4;
+        display: grid;
+        gap: clamp(3px, 0.8vw, 12px);
+        place-items: center;
+        width: 100%;
+        color: #a8ffa8;
+        line-height: 1.08;
+      }
+
+      #it-console-clicker .monitor-game-over strong {
+        font-size: clamp(0.8rem, 2.05vw, 2.1rem);
+        line-height: 1;
+      }
+
+      #it-console-clicker .monitor-game-over span {
+        font-size: clamp(0.62rem, 1.35vw, 1.25rem);
+        font-weight: 800;
+      }
+
+      #it-console-clicker .monitor-game-over button,
+      #it-console-clicker .start-overlay {
+        border: 0;
+        color: #ffffff;
+        font-family: "Courier New", Courier, monospace;
+        font-weight: 900;
+        letter-spacing: 0;
+        text-align: center;
+        text-shadow:
+          0 2px 0 #6c0000,
+          0 0 10px rgba(255, 242, 220, 0.72);
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+
+      #it-console-clicker .monitor-game-over button {
+        min-width: min(88%, 190px);
+        min-height: clamp(26px, 4.2vw, 48px);
+        padding: 0 clamp(8px, 1.2vw, 16px);
+        border: 2px solid rgba(255, 217, 132, 0.95);
+        border-radius: 2px;
+        background: linear-gradient(#e73322, #9f0808);
+        box-shadow:
+          inset 0 -4px 0 rgba(0, 0, 0, 0.34),
+          0 0 12px rgba(255, 64, 48, 0.42);
+        font-size: clamp(0.58rem, 1.15vw, 1.05rem);
+      }
+
+      #it-console-clicker .escalade-hitbox,
+      #it-console-clicker .start-overlay {
+        position: absolute;
+        left: var(--button-left);
+        top: var(--button-top);
+        z-index: 7;
+        width: var(--button-width);
+        height: var(--button-height);
+        border-radius: 12% / 15%;
+      }
+
+      #it-console-clicker .escalade-hitbox {
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+      }
+
+      #it-console-clicker .escalade-hitbox:disabled {
+        cursor: default;
+      }
+
+      #it-console-clicker .start-overlay {
+        display: grid;
+        place-items: center;
+        padding: clamp(4px, 0.8vw, 12px);
+        background: rgba(168, 0, 0, 0.5);
+        box-shadow:
+          inset 0 -6px 0 rgba(0, 0, 0, 0.28),
+          0 0 18px rgba(255, 30, 30, 0.32);
+        font-size: clamp(0.48rem, 1.2vw, 1.15rem);
+        line-height: 1.04;
+      }
+
+      #it-console-clicker .rules-jump {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: min(100%, 1320px);
+        min-height: 48px;
+        margin: clamp(10px, 1.4vw, 16px) auto 0;
+        border: 2px solid rgba(234, 255, 133, 0.82);
+        border-radius: 4px;
+        background:
+          linear-gradient(180deg, rgba(234, 255, 133, 0.18), rgba(42, 171, 238, 0.08)),
+          rgba(7, 17, 26, 0.9);
+        color: #f7ffb4;
+        font-family: "Courier New", Courier, monospace;
+        font-size: clamp(0.9rem, 1.35vw, 1.18rem);
+        font-weight: 900;
+        letter-spacing: 0;
+        text-align: center;
+        text-decoration: none;
+        text-shadow: 0 0 10px rgba(234, 255, 133, 0.55);
+        text-transform: uppercase;
+        box-shadow:
+          inset 0 -3px 0 rgba(0, 0, 0, 0.28),
+          0 0 22px rgba(84, 199, 255, 0.18);
+      }
+
+      #it-console-clicker .rules-jump:hover,
+      #it-console-clicker .rules-jump:focus-visible {
+        border-color: rgba(84, 199, 255, 0.95);
+        color: #ffffff;
+      }
+
+      #it-console-clicker .escalade-hitbox:focus-visible,
+      #it-console-clicker .start-overlay:focus-visible,
+      #it-console-clicker .monitor-game-over button:focus-visible {
+        outline: 3px solid #eaff85;
+        outline-offset: 3px;
+      }
+
+      @media (max-width: 760px) {
+        #it-console-clicker {
+          padding: 8px;
+        }
+
+        #it-console-clicker .console-shell {
+          border-radius: 5px;
+        }
+
+        #it-console-clicker .monitor-screen {
+          padding: clamp(5px, 1.45vw, 12px);
+        }
+      }
+    </style>
   </head>
   <body>
+    <section id="it-console-clicker" aria-label="Retro IT monitoring clicker">
+      <div class="console-shell is-start" data-console-shell>
+        <div class="monitor-screen" data-monitor-screen aria-live="polite">
+          <div class="monitor-alert" data-monitor-text>SYSTEM STANDBY</div>
+          <div class="monitor-game-over" data-game-over hidden>
+            <strong>GAME OVER</strong>
+            <span data-score>SCORE: 0</span>
+            <button type="button" data-restart>RESTART</button>
+          </div>
+        </div>
+        <button
+          class="escalade-hitbox"
+          type="button"
+          data-escalade
+          aria-label="Escalade"
+          disabled
+        ></button>
+        <div class="console-dimmer" aria-hidden="true"></div>
+        <button class="start-overlay" type="button" data-start>PRESS TO START</button>
+      </div>
+      <a class="rules-jump" href="#deployment-note">RULES / DEPLOYMENT NOTE</a>
+    </section>
+
+    <script>
+      (() => {
+        const root = document.querySelector("#it-console-clicker");
+        const shell = root.querySelector("[data-console-shell]");
+        const monitorScreen = root.querySelector("[data-monitor-screen]");
+        const monitorText = root.querySelector("[data-monitor-text]");
+        const gameOverPanel = root.querySelector("[data-game-over]");
+        const scoreNode = root.querySelector("[data-score]");
+        const startButton = root.querySelector("[data-start]");
+        const restartButton = root.querySelector("[data-restart]");
+        const escaladeButton = root.querySelector("[data-escalade]");
+
+        const alerts = [
+          "OOM KILLED",
+          "CERT EXPIRED",
+          "DISK FULL 99%",
+          "CPU SPIKE 100%",
+          "DB DOWN",
+          "502 BAD GW",
+          "POD CRASHED",
+          "API TIMEOUT",
+          "REDIS ERROR",
+          "DNS FAILURE",
+          "HEAP OVERFLOW",
+          "NODE OFFLINE",
+          "KUBELET DOWN",
+          "SSL INVALID",
+          "BACKUP FAILED",
+          "NETWORK DROP",
+          "DDOS ATTACK",
+          "ROUTER DOWN",
+          "AUTH FAILURE",
+          "MQ OVERFLOW",
+        ];
+
+        const nonAlerts = [
+          "FOOT ITCHES",
+          "DOCKER V42 OUT",
+          "COFFEE READY",
+          "SLACK NOTIF",
+          "LUNCH TIME",
+          "CI PASSED",
+          "GIT PUSHED",
+          "NEW EMAIL",
+          "WIN UPDATE",
+          "HELLOWORLD",
+        ];
+
+        const roundDurationMs = 2000;
+        let gameState = "start";
+        let currentItem = null;
+        let roundTimer = 0;
+        let pressTimer = 0;
+        let score = 0;
+
+        function randomFrom(items) {
+          return items[Math.floor(Math.random() * items.length)];
+        }
+
+        function clearRoundTimer() {
+          if (roundTimer) {
+            window.clearTimeout(roundTimer);
+            roundTimer = 0;
+          }
+        }
+
+        function triggerButtonPress() {
+          shell.classList.add("is-pressed");
+          window.clearTimeout(pressTimer);
+          pressTimer = window.setTimeout(() => {
+            shell.classList.remove("is-pressed");
+          }, 140);
+        }
+
+        function setGameState(nextState) {
+          gameState = nextState;
+          shell.classList.toggle("is-start", gameState === "start");
+          shell.classList.toggle("is-playing", gameState === "playing");
+          shell.classList.toggle("is-game-over", gameState === "game-over");
+          startButton.hidden = gameState !== "start";
+          escaladeButton.disabled = gameState !== "playing";
+          monitorText.hidden = gameState === "game-over";
+          gameOverPanel.hidden = gameState !== "game-over";
+        }
+
+        function fitMonitorText() {
+          if (monitorText.hidden) {
+            return;
+          }
+
+          const maxSize = Math.max(
+            12,
+            Math.min(monitorScreen.clientWidth * 0.14, monitorScreen.clientHeight * 0.28),
+          );
+          let size = maxSize;
+          monitorText.style.fontSize = `${size}px`;
+
+          while (
+            size > 9 &&
+            (monitorText.scrollWidth > monitorScreen.clientWidth ||
+              monitorText.scrollHeight > monitorScreen.clientHeight)
+          ) {
+            size -= 1;
+            monitorText.style.fontSize = `${size}px`;
+          }
+        }
+
+        function renderMonitor(text, kind) {
+          monitorText.textContent = text;
+          monitorText.dataset.kind = kind;
+          window.requestAnimationFrame(fitMonitorText);
+        }
+
+        function pickNextItem() {
+          const isAlert = Math.random() < 0.5;
+          return {
+            isAlert,
+            text: isAlert ? randomFrom(alerts) : randomFrom(nonAlerts),
+          };
+        }
+
+        function endGame() {
+          clearRoundTimer();
+          currentItem = null;
+          scoreNode.textContent = `SCORE: ${score}`;
+          setGameState("game-over");
+        }
+
+        function nextRound() {
+          clearRoundTimer();
+          currentItem = pickNextItem();
+          renderMonitor(currentItem.text, currentItem.isAlert ? "alert" : "non-alert");
+          roundTimer = window.setTimeout(() => {
+            if (gameState !== "playing" || !currentItem) {
+              return;
+            }
+
+            if (currentItem.isAlert) {
+              endGame();
+              return;
+            }
+
+            nextRound();
+          }, roundDurationMs);
+        }
+
+        function startGame() {
+          clearRoundTimer();
+          score = 0;
+          currentItem = null;
+          setGameState("playing");
+          nextRound();
+        }
+
+        function handleEscaladeClick() {
+          if (gameState !== "playing" || !currentItem) {
+            return;
+          }
+
+          triggerButtonPress();
+
+          if (!currentItem.isAlert) {
+            endGame();
+            return;
+          }
+
+          score += 100;
+          nextRound();
+        }
+
+        startButton.addEventListener("click", () => {
+          triggerButtonPress();
+          startGame();
+        });
+
+        escaladeButton.addEventListener("click", handleEscaladeClick);
+
+        restartButton.addEventListener("click", () => {
+          triggerButtonPress();
+          startGame();
+        });
+
+        if ("ResizeObserver" in window) {
+          new ResizeObserver(fitMonitorText).observe(monitorScreen);
+        } else {
+          window.addEventListener("resize", fitMonitorText);
+        }
+
+        setGameState("start");
+        fitMonitorText();
+      })();
+    </script>
+
     <main>
       <section class="hero">
         <div class="hero-copy">
@@ -140,18 +627,29 @@
         </div>
       </section>
 
-      <section class="transparency" aria-labelledby="browser-title">
+      <section class="transparency" id="deployment-note" aria-labelledby="browser-title">
         <div>
           <p class="eyebrow">Deployment note</p>
-          <h2 id="browser-title">Why not playable directly in the browser?</h2>
+          <h2 id="browser-title">Why tgLarn is not playable directly in the browser?</h2>
         </div>
-        <p>
-          tglarn keeps dedicated per-user ReLarn C subprocess sessions on EC2 and
-          persists state through MongoDB. That runtime model depends on secure server-side
-          process management, PTY I/O, and Telegram callback validation. GitLab Pages is a
-          static hosting environment, so this page serves as a high-fidelity preview and a
-          direct entry point to the production Telegram bot.
-        </p>
+        <div class="deployment-copy">
+          <p>
+            tglarn keeps dedicated per-user ReLarn C subprocess sessions on EC2 and
+            persists state through MongoDB. That runtime model depends on secure
+            server-side process management, PTY I/O, and Telegram callback validation.
+            GitLab Pages is a static hosting environment, so this page serves as a
+            high-fidelity preview and a direct entry point to the production Telegram bot.
+          </p>
+          <p>
+            Leadership demands a playable GitLab Pages build. Fine. On top of a
+            genuinely complex, large, and interesting project, I am placing a clicker.
+          </p>
+          <p>
+            The rules are simple: if the screen shows an alert, hit ESCALADE before time
+            runs out. If it is not an alert, keep your hands off the button. Every correct
+            escalation scores points. A bad click or a late click ends the run. Enjoy.
+          </p>
+        </div>
       </section>
     </main>
     <script src="script.js"></script>
