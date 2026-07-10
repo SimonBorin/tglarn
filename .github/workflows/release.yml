@@ -1,0 +1,353 @@
+name: Release and deploy
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: SemVer component to increment
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: Verify release candidate
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out release commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Require main for a manual release
+        if: github.event_name == 'workflow_dispatch'
+        run: '[[ "$GITHUB_REF" == "refs/heads/main" ]]'
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install project
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run Ruff
+        run: python -m ruff check .
+
+      - name: Run tests
+        run: python -m pytest
+
+  version:
+    name: Create SemVer tag
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      revision: ${{ steps.revision.outputs.revision }}
+
+    steps:
+      - name: Check out release commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Select bump type
+        id: bump
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_BUMP: ${{ inputs.bump }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          bump = os.environ.get("MANUAL_BUMP") or "patch"
+          if os.environ["EVENT_NAME"] == "pull_request":
+              with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as event_file:
+                  event = json.load(event_file)
+              labels = {label["name"] for label in event["pull_request"].get("labels", [])}
+              if "semver:major" in labels:
+                  bump = "major"
+              elif "semver:minor" in labels:
+                  bump = "minor"
+              else:
+                  bump = "patch"
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              print(f"bump={bump}", file=output)
+          PY
+
+      - name: Calculate version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BUMP: ${{ steps.bump.outputs.bump }}
+        run: |
+          existing=""
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            existing="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+          fi
+
+          if [[ "$existing" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            version="${existing#v}"
+          else
+            version="$(python scripts/next_version.py --bump "$BUMP")"
+          fi
+
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "tag=v$version" >>"$GITHUB_OUTPUT"
+
+      - name: Record revision
+        id: revision
+        run: echo "revision=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+
+      - name: Push release tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            [[ "$(git rev-list -n 1 "$TAG")" == "$(git rev-parse HEAD)" ]]
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+  build-and-deploy:
+    name: Build and deploy ${{ needs.version.outputs.tag }}
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      REVISION: ${{ needs.version.outputs.revision }}
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_SSH: ${{ secrets.EC2_SSH }}
+      TG_LARN_BOT_TOKEN: ${{ secrets.TG_LARN_BOT_TOKEN }}
+
+    steps:
+      - name: Check out tagged revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Validate deployment secrets
+        run: |
+          [[ -n "$EC2_HOST" ]]
+          [[ -n "$EC2_USER" ]]
+          [[ -n "$EC2_SSH" ]]
+          [[ -n "$TG_LARN_BOT_TOKEN" ]]
+
+      - name: Configure SSH
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          install -m 600 /dev/null "$HOME/.ssh/ec2_key"
+          printf '%s\n' "$EC2_SSH" >"$HOME/.ssh/ec2_key"
+          ssh-keygen -y -f "$HOME/.ssh/ec2_key" >/dev/null
+
+      - name: Detect EC2 architecture
+        id: target
+        run: |
+          architecture="$(
+            ssh \
+              -i "$HOME/.ssh/ec2_key" \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=accept-new \
+              -o ServerAliveInterval=30 \
+              "$EC2_USER@$EC2_HOST" \
+              uname -m
+          )"
+
+          case "$architecture" in
+            x86_64 | amd64) platform="linux/amd64" ;;
+            aarch64 | arm64) platform="linux/arm64" ;;
+            *) echo "Unsupported EC2 architecture: $architecture" >&2; exit 1 ;;
+          esac
+
+          echo "platform=$platform" >>"$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build versioned image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Containerfile
+          platforms: ${{ steps.target.outputs.platform }}
+          tags: tglarn:${{ env.VERSION }}
+          build-args: |
+            TGLARN_VERSION=${{ env.VERSION }}
+            TGLARN_REVISION=${{ env.REVISION }}
+          outputs: type=docker,dest=/tmp/tglarn-image.tar
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Prepare deployment files
+        run: |
+          gzip -9 /tmp/tglarn-image.tar
+          umask 077
+          {
+            printf 'TG_LARN_BOT_TOKEN=%s\n' "$TG_LARN_BOT_TOKEN"
+            printf 'MONGO_URI=mongodb://tglarn-mongo:27017/tglarn\n'
+            printf 'MONGO_DATABASE=tglarn\n'
+            printf 'GAME_ADAPTER=relarn_process\n'
+            printf 'DEFAULT_MAP_VIEW=wide\n'
+            printf 'LOG_LEVEL=INFO\n'
+            printf 'DATABASE_STARTUP_ATTEMPTS=30\n'
+            printf 'DATABASE_STARTUP_DELAY_SECONDS=2\n'
+            printf 'REPOSITORY_URL=https://github.com/%s\n' "$GITHUB_REPOSITORY"
+          } >/tmp/tglarn-bot.env
+
+      - name: Upload image and configuration
+        run: |
+          scp \
+            -i "$HOME/.ssh/ec2_key" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=accept-new \
+            /tmp/tglarn-image.tar.gz \
+            /tmp/tglarn-bot.env \
+            "$EC2_USER@$EC2_HOST:/tmp/"
+
+      - name: Deploy on EC2
+        run: |
+          ssh \
+            -i "$HOME/.ssh/ec2_key" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -o ServerAliveInterval=30 \
+            "$EC2_USER@$EC2_HOST" \
+            "VERSION='$VERSION' sh -se" <<'REMOTE'
+          docker_command() {
+            if docker info >/dev/null 2>&1; then
+              docker "$@"
+            else
+              sudo docker "$@"
+            fi
+          }
+
+          image="tglarn:$VERSION"
+          archive="/tmp/tglarn-image.tar.gz"
+          runtime_root="$HOME/tglarn-runtime"
+          env_file="$runtime_root/bot.env"
+          previous_env="$runtime_root/bot.env.previous"
+          bot_container="tglarn-bot"
+          mongo_container="tglarn-mongo"
+          network="tglarn-net"
+
+          command -v docker >/dev/null 2>&1
+          command -v gzip >/dev/null 2>&1
+          docker_command info >/dev/null
+
+          mkdir -p "$runtime_root"
+          if [ -f "$env_file" ]; then
+            cp "$env_file" "$previous_env"
+          fi
+          mv /tmp/tglarn-bot.env "$env_file"
+          chmod 600 "$env_file"
+
+          gzip -dc "$archive" | docker_command load
+          docker_command image inspect "$image" >/dev/null
+
+          docker_command network inspect "$network" >/dev/null 2>&1 || \
+            docker_command network create "$network" >/dev/null
+          docker_command volume create tglarn-mongo-data >/dev/null
+
+          if docker_command container inspect "$mongo_container" >/dev/null 2>&1; then
+            docker_command start "$mongo_container" >/dev/null || true
+            docker_command network connect "$network" "$mongo_container" >/dev/null 2>&1 || true
+          else
+            docker_command run -d \
+              --name "$mongo_container" \
+              --restart unless-stopped \
+              --network "$network" \
+              -v tglarn-mongo-data:/data/db \
+              mongo:7 >/dev/null
+          fi
+
+          previous_image="$(
+            docker_command container inspect \
+              --format '{{.Config.Image}}' "$bot_container" 2>/dev/null || true
+          )"
+
+          rollback() {
+            docker_command rm -f "$bot_container" >/dev/null 2>&1 || true
+            if [ -f "$previous_env" ]; then
+              cp "$previous_env" "$env_file"
+              chmod 600 "$env_file"
+            fi
+            if [ -n "$previous_image" ]; then
+              docker_command run -d \
+                --name "$bot_container" \
+                --restart unless-stopped \
+                --network "$network" \
+                --env-file "$env_file" \
+                "$previous_image" >/dev/null || true
+            fi
+          }
+
+          docker_command rm -f "$bot_container" >/dev/null 2>&1 || true
+          if ! docker_command run -d \
+            --name "$bot_container" \
+            --restart unless-stopped \
+            --network "$network" \
+            --env-file "$env_file" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            "$image" >/dev/null; then
+            rollback
+            exit 1
+          fi
+
+          sleep 10
+          status="$(docker_command container inspect --format '{{.State.Status}}' "$bot_container")"
+          if [ "$status" != "running" ]; then
+            docker_command logs --tail 100 "$bot_container" >&2 || true
+            rollback
+            exit 1
+          fi
+
+          docker_command tag "$image" tglarn:latest
+          rm -f "$archive"
+          docker_command ps --filter "name=$bot_container" --filter "name=$mongo_container"
+          REMOTE
+
+      - name: Remove SSH key
+        if: always()
+        run: rm -f "$HOME/.ssh/ec2_key" /tmp/tglarn-bot.env
