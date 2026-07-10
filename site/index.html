@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="TGLarn brings the classic ReLarn roguelike to Telegram with rendered maps, contextual controls, and persistent game sessions."
+    />
+    <meta name="theme-color" content="#070b08" />
+    <meta name="author" content="@blooomberg together with Codex" />
+    <meta property="og:title" content="TGLarn — The dungeon fits in your pocket" />
+    <meta
+      property="og:description"
+      content="A classic turn-based roguelike, reimagined for Telegram."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://simonborin.github.io/tglarn/" />
+    <meta
+      property="og:image"
+      content="https://simonborin.github.io/tglarn/assets/tglarn-map-render.png"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TGLarn — The dungeon fits in your pocket" />
+    <meta
+      name="twitter:description"
+      content="A classic turn-based roguelike, reimagined for Telegram."
+    />
+    <meta
+      name="twitter:image"
+      content="https://simonborin.github.io/tglarn/assets/tglarn-map-render.png"
+    />
+    <title>TGLarn — Play a classic roguelike in Telegram</title>
+    <link rel="canonical" href="https://simonborin.github.io/tglarn/" />
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TGLarn",
+        "description": "A classic turn-based roguelike adapted for Telegram.",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "Telegram",
+        "url": "https://simonborin.github.io/tglarn/",
+        "downloadUrl": "https://t.me/tglarnbot",
+        "license": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+        "author": {
+          "@type": "Person",
+          "name": "@blooomberg",
+          "email": "mrblooomberg@gmail.com",
+          "sameAs": "https://t.me/blooomberg"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="TGLarn home">
+        <span class="brand-mark" aria-hidden="true">@</span>
+        <span>TGLarn</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#gameplay">Gameplay</a>
+        <a href="#gallery">Screenshots</a>
+        <a href="#architecture">How it works</a>
+      </nav>
+      <a class="header-cta" href="https://t.me/tglarnbot">Play now <span>↗</span></a>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="status-line"><span></span> Live on Telegram</p>
+          <h1 id="hero-title">The dungeon fits<br />in your pocket.</h1>
+          <p class="hero-lead">
+            TGLarn carries the original ReLarn adventure into Telegram—every turn,
+            spell, shop, monster, and terrible decision intact.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://t.me/tglarnbot">
+              Play in Telegram <span aria-hidden="true">↗</span>
+            </a>
+            <a class="button button-quiet" href="#gameplay">See the adventure</a>
+          </div>
+          <dl class="hero-meta" aria-label="Project facts">
+            <div>
+              <dt>Engine</dt>
+              <dd>ReLarn C</dd>
+            </div>
+            <div>
+              <dt>World</dt>
+              <dd>Turn-based</dd>
+            </div>
+            <div>
+              <dt>Release</dt>
+              <dd id="latest-version">v0.1.0</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="hero-stage" aria-label="TGLarn dungeon preview">
+          <div class="terminal-window">
+            <div class="terminal-bar">
+              <span class="terminal-title">CAVERNS / LEVEL 1</span>
+              <span class="terminal-signal">SESSION ACTIVE</span>
+            </div>
+            <figure class="map-frame">
+              <img
+                src="assets/tglarn-map-render.png"
+                alt="Rendered TGLarn dungeon map with corridors, rooms, monsters, and the player"
+                width="680"
+                height="512"
+              />
+              <figcaption>
+                <span><b>@</b> You</span>
+                <span><b class="enemy">S</b> Monster</span>
+                <span><b class="treasure">*</b> Treasure</span>
+              </figcaption>
+            </figure>
+          </div>
+
+          <a class="qr-ticket" href="https://t.me/tglarnbot" aria-label="Open @tglarnbot">
+            <img
+              src="assets/tglarn-bot-qr.png"
+              alt="QR code for the @tglarnbot Telegram bot"
+              width="505"
+              height="630"
+            />
+            <span>
+              <strong>Enter the caverns</strong>
+              Scan to open @tglarnbot
+            </span>
+          </a>
+        </div>
+      </section>
+
+      <section class="product-strip" aria-label="TGLarn highlights">
+        <article>
+          <span>01</span>
+          <h2>Classic roguelike</h2>
+          <p>Permadeath, exploration, scarcity, and the thrill of one more turn.</p>
+        </article>
+        <article>
+          <span>02</span>
+          <h2>Original engine</h2>
+          <p>The ReLarn C engine remains the authority behind every game rule.</p>
+        </article>
+        <article>
+          <span>03</span>
+          <h2>Telegram-native</h2>
+          <p>Maps become images and terminal prompts become contextual buttons.</p>
+        </article>
+        <article>
+          <span>04</span>
+          <h2>Always waiting</h2>
+          <p>Your personal run persists between chats, commutes, and close calls.</p>
+        </article>
+      </section>
+
+      <section class="story-section section-grid reveal" aria-labelledby="story-title">
+        <div class="section-label">
+          <span>THE QUEST</span>
+          <i aria-hidden="true"></i>
+        </div>
+        <div class="story-copy">
+          <p class="overline">A cure lies somewhere below.</p>
+          <h2 id="story-title">An old-school adventure with something worth surviving for.</h2>
+          <p>
+            Your daughter is dying from Dianthroritis. You have only a handful of days to
+            descend into Larn, gather enough power, and return with the Potion of Cure.
+            The dungeon is indifferent. Every decision is permanent.
+          </p>
+        </div>
+        <blockquote>
+          <span aria-hidden="true">“</span>
+          Find the potion.<br />Make it home.<br />Try not to die.
+        </blockquote>
+      </section>
+
+      <section class="gameplay-section reveal" id="gameplay" aria-labelledby="gameplay-title">
+        <div class="section-heading">
+          <div>
+            <p class="overline">One message. One turn.</p>
+            <h2 id="gameplay-title">Everything a roguelike needs.</h2>
+          </div>
+          <p>
+            The interface changed. The tension did not. TGLarn keeps the systems that make
+            every expedition unpredictable and turns their commands into clear Telegram actions.
+          </p>
+        </div>
+
+        <div class="gameplay-grid">
+          <article class="gameplay-card card-explore">
+            <span class="ascii-icon" aria-hidden="true">@→?</span>
+            <p class="card-index">01 / EXPLORE</p>
+            <h3>Read the dungeon</h3>
+            <p>Map rooms, trace corridors, inspect strange objects, and choose when to descend.</p>
+          </article>
+          <article class="gameplay-card card-fight">
+            <span class="ascii-icon danger" aria-hidden="true">@×S</span>
+            <p class="card-index">02 / FIGHT</p>
+            <h3>Pick your battles</h3>
+            <p>Trade blows with monsters, manage health, and know when survival means retreat.</p>
+          </article>
+          <article class="gameplay-card">
+            <span class="ascii-icon" aria-hidden="true">[a-z]</span>
+            <p class="card-index">03 / INVENTORY</p>
+            <h3>Carry what matters</h3>
+            <p>Equip weapons, read scrolls, quaff potions, and make every inventory slot count.</p>
+          </article>
+          <article class="gameplay-card card-shop">
+            <span class="ascii-icon amber" aria-hidden="true">$247</span>
+            <p class="card-index">04 / TRADE</p>
+            <h3>Return to town</h3>
+            <p>Sell treasure, upgrade equipment, visit the bank, and prepare for the next descent.</p>
+          </article>
+          <article class="gameplay-card">
+            <span class="ascii-icon magic" aria-hidden="true">※</span>
+            <p class="card-index">05 / MAGIC</p>
+            <h3>Learn dangerous words</h3>
+            <p>Discover spells and decide whether precious magic should solve this problem or the next.</p>
+          </article>
+          <article class="gameplay-card card-death">
+            <span class="ascii-icon danger" aria-hidden="true">R.I.P.</span>
+            <p class="card-index">06 / BEGIN AGAIN</p>
+            <h3>Die. Learn. Return.</h3>
+            <p>Every run ends in a cure, a deadline, or a grave. The next character starts wiser.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="gallery-section reveal" id="gallery" aria-labelledby="gallery-title">
+        <div class="section-heading">
+          <div>
+            <p class="overline">From terminal to Telegram</p>
+            <h2 id="gallery-title">The original game, made readable anywhere.</h2>
+          </div>
+          <p>
+            Real TGLarn output: crisp rendered maps, explicit prompts, and controls that adapt to
+            the exact state of the C engine.
+          </p>
+        </div>
+
+        <div class="gallery-grid">
+          <figure class="shot shot-map">
+            <button
+              class="shot-open"
+              type="button"
+              data-image="assets/tglarn-map-render.png"
+              data-alt="Rendered TGLarn dungeon map"
+            >
+              <img
+                src="assets/tglarn-map-render.png"
+                alt="Rendered dungeon map with player, monsters, doors, and treasure"
+                width="680"
+                height="512"
+                loading="lazy"
+              />
+              <span class="expand-hint">Expand ↗</span>
+            </button>
+            <figcaption><span>01</span> Rendered dungeon map</figcaption>
+          </figure>
+
+          <figure class="shot shot-controls">
+            <div class="controls-preview" aria-label="Telegram movement controls preview">
+              <div class="mini-message">
+                <span>@ waits at the eastern door.</span>
+                <small>What will you do?</small>
+              </div>
+              <div class="mini-keyboard" aria-hidden="true">
+                <span>↖</span><span>↑</span><span>↗</span>
+                <span>←</span><span>Inspect</span><span>→</span>
+                <span>↙</span><span>↓</span><span>↘</span>
+              </div>
+            </div>
+            <figcaption><span>02</span> Contextual Telegram controls</figcaption>
+          </figure>
+
+          <figure class="shot shot-store">
+            <button
+              class="shot-open"
+              type="button"
+              data-image="assets/tglarn-store-prompt.png"
+              data-alt="TGLarn store prompt with Telegram inline buttons"
+            >
+              <img
+                src="assets/tglarn-store-prompt.png"
+                alt="Larn Trading Post prompt with Telegram inline keyboard"
+                width="900"
+                height="680"
+                loading="lazy"
+              />
+              <span class="expand-hint">Expand ↗</span>
+            </button>
+            <figcaption><span>03</span> Shop prompt and inline keyboard</figcaption>
+          </figure>
+
+          <figure class="shot shot-gameover">
+            <button
+              class="shot-open"
+              type="button"
+              data-image="assets/tglarn-game-over.png"
+              data-alt="TGLarn game-over credits screen"
+            >
+              <img
+                src="assets/tglarn-game-over.png"
+                alt="TGLarn game-over screen"
+                width="640"
+                height="512"
+                loading="lazy"
+              />
+              <span class="expand-hint">Expand ↗</span>
+            </button>
+            <figcaption><span>04</span> The end of a run</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="architecture-section reveal" id="architecture" aria-labelledby="architecture-title">
+        <div class="section-heading architecture-heading">
+          <div>
+            <p class="overline">Under the dungeon</p>
+            <h2 id="architecture-title">Four parts. One continuous run.</h2>
+          </div>
+          <p>
+            TGLarn translates an old terminal protocol without rewriting the game. The original
+            engine still decides what happens; the surrounding layers make it feel native to chat.
+          </p>
+        </div>
+
+        <div class="architecture-flow" aria-label="TGLarn system architecture">
+          <article class="architecture-node">
+            <span>01</span>
+            <div class="node-symbol telegram-symbol" aria-hidden="true">➤</div>
+            <h3>Telegram</h3>
+            <p>Messages, maps, and inline controls reach the player.</p>
+          </article>
+          <i class="flow-arrow" aria-hidden="true">→</i>
+          <article class="architecture-node">
+            <span>02</span>
+            <div class="node-symbol" aria-hidden="true">PY</div>
+            <h3>Python adapter</h3>
+            <p>Turns button presses into terminal commands and responses.</p>
+          </article>
+          <i class="flow-arrow" aria-hidden="true">→</i>
+          <article class="architecture-node engine-node">
+            <span>03</span>
+            <div class="node-symbol" aria-hidden="true">C</div>
+            <h3>ReLarn engine</h3>
+            <p>Owns the dungeon, combat, inventory, magic, and rules.</p>
+          </article>
+          <i class="flow-arrow storage-arrow" aria-hidden="true">↕</i>
+          <article class="architecture-node storage-node">
+            <span>04</span>
+            <div class="node-symbol database-symbol" aria-hidden="true">▤</div>
+            <h3>MongoDB</h3>
+            <p>Preserves player sessions and brings every run back.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="creator-section reveal" aria-labelledby="creator-title">
+        <div class="creator-copy">
+          <p class="overline">Behind the bot</p>
+          <h2 id="creator-title">Made by @blooomberg<br />together with Codex.</h2>
+          <p>
+            Product direction, game adaptation, and the Telegram experience by
+            <a href="https://t.me/blooomberg">@blooomberg</a>. Built in collaboration with Codex.
+          </p>
+          <div class="creator-links">
+            <a href="https://t.me/blooomberg">Telegram ↗</a>
+            <a href="mailto:mrblooomberg@gmail.com">mrblooomberg@gmail.com</a>
+          </div>
+        </div>
+        <a class="creator-card" href="https://t.me/blooomberg" aria-label="Open @blooomberg on Telegram">
+          <img
+            src="assets/author-qr.png"
+            alt="QR code linking to @blooomberg on Telegram"
+            width="702"
+            height="927"
+            loading="lazy"
+          />
+          <span>Open creator profile <b>↗</b></span>
+        </a>
+      </section>
+
+      <section class="final-cta reveal" aria-labelledby="cta-title">
+        <div class="cta-map" aria-hidden="true">
+          <img src="assets/tglarn-map-render.png" alt="" width="680" height="512" loading="lazy" />
+        </div>
+        <div class="cta-copy">
+          <p class="overline">Your move</p>
+          <h2 id="cta-title">The caverns are open.</h2>
+          <p>Choose a character. Take one step. See how far the run goes.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://t.me/tglarnbot">Open @tglarnbot ↗</a>
+            <a class="button button-quiet" href="https://github.com/SimonBorin/tglarn">View on GitHub</a>
+          </div>
+          <p class="release-line">Current release <strong class="js-version">v0.1.0</strong></p>
+        </div>
+        <a class="cta-qr" href="https://t.me/tglarnbot" aria-label="Open @tglarnbot">
+          <img
+            src="assets/tglarn-bot-qr.png"
+            alt="QR code for @tglarnbot"
+            width="505"
+            height="630"
+            loading="lazy"
+          />
+        </a>
+      </section>
+    </main>
+
+    <footer>
+      <a class="brand footer-brand" href="#top"><span class="brand-mark">@</span><span>TGLarn</span></a>
+      <p>
+        ReLarn-derived work distributed under GPL-2.0.<br />ReLarn © 1986–2020 The Authors.
+      </p>
+      <div class="footer-links">
+        <a href="https://github.com/SimonBorin/tglarn">GitHub</a>
+        <a href="https://t.me/tglarnbot">Telegram bot</a>
+        <a href="https://t.me/blooomberg">@blooomberg</a>
+      </div>
+      <p class="footer-credit">
+        Made by <a href="https://t.me/blooomberg">@blooomberg</a>
+        with <a href="mailto:mrblooomberg@gmail.com">mrblooomberg@gmail.com</a>
+        together with Codex.
+      </p>
+    </footer>
+
+    <dialog class="lightbox" id="lightbox" aria-label="Screenshot preview">
+      <button class="lightbox-close" type="button" aria-label="Close screenshot">×</button>
+      <img src="assets/tglarn-map-render.png" alt="" />
+    </dialog>
+
+    <script src="script.js" defer></script>
+  </body>
+</html>
