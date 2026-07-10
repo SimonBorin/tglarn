@@ -12,6 +12,8 @@ buttons.
 
 Open the live bot: [@tglarnbot](https://t.me/tglarnbot)
 
+Visit the project site: [simonborin.github.io/tglarn](https://simonborin.github.io/tglarn/)
+
 Scan the QR code or follow the link above to start a game:
 
 ![Telegram QR code for @tglarnbot](docs/screenshots/tglarn-bot-qr.png)
@@ -64,6 +66,11 @@ The original engine and the Telegram integration remain deliberately separate:
 - `game/tglarn_game/` — the game adapter and ReLarn process bridge.
 - `bot/tglarn_bot/` — Telegram handlers, controls, rendering, and persistence.
 - `tests/` — automated coverage of gameplay integration and bot behavior.
+
+## Created By
+
+TGLarn was created by [@blooomberg](https://t.me/blooomberg)
+([mrblooomberg@gmail.com](mailto:mrblooomberg@gmail.com)) together with Codex.
 
 ## Licensing & Credits
 
