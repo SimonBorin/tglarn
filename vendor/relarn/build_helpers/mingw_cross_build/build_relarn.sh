@@ -8,10 +8,11 @@ ARCH=x86_64
 
 MINGW_PREFIX=$ARCH-w64-mingw32
 
-# We have a slight modified version of PDCurses that we use instead of
-# the main one.
-PDCURSES_REPO=https://gitlab.com/relarn/relarn-pdcurses.git
-RELARN_PDCURSES_RELEASE=3.8-relarn-config
+# We use a slightly modified version of PDCurses instead of the main one.
+# Supply its repository URL explicitly so the build is independent of a
+# particular source-code host.
+: "${PDCURSES_REPO:?Set PDCURSES_REPO to the customized PDCurses repository URL}"
+RELARN_PDCURSES_RELEASE=${RELARN_PDCURSES_RELEASE:-3.8-relarn-config}
 
 export DEBUG=Y      # Build PDCurses with debugging enabled
 

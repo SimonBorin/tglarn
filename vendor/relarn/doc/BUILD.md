@@ -26,8 +26,8 @@ To build basic ReLarn, you will need:
 
 To build the graphical version of ReLarn, you will also need
 
-* PDCurses 3.8 (cloned [here](https://gitlab.com/relarn/relarn-pdcurses.git)
-  for your convenience with some makefile tweaks) instead of ncurses.
+* A customized PDCurses 3.8 fork with the required makefile tweaks instead of
+  ncurses.
 * SDL2 and SDL2_ttf and all their dependencies
 
 
@@ -111,10 +111,9 @@ support for this.
 
 Building it is pretty straightforward:
 
-First, clone the repo.  I use my copy for security but it's no
-different from the upstream.
+First, clone the customized PDCurses repository used by your build.
 
-    git clone https://gitlab.com/relarn/relarn-pdcurses.git
+    git clone "$PDCURSES_REPO" relarn-pdcurses
 
 Also install the SDL dependencies (SDL2 and the TrueType font
 extension) if you haven't already.  On Ubuntu, this is:
@@ -230,6 +229,5 @@ As with `macOS`, part of `make tarball` is fetching all of the
 necessary DLLs so that it will work.  (You may need to manually include
 the SDL DLLs as well; there may be a bug in the script that I haven't
 yet tracked down.)
-
 
 

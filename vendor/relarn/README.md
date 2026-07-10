@@ -17,7 +17,7 @@ game on modern computers.
 See [Changes.md](Changes.md) for a more complete summary of changes.
 
 * [Website](http://relarn.org)
-* [Gitlab](https://gitlab.com/relarn/relarn)
+* [Source mirror](https://github.com/relarn/relarn)
 
 
 ## Getting Started
@@ -54,4 +54,3 @@ decades so it's impossible to track down everyone.
 This project is licensed under the GNU General Public License
 version 2.  See [Copyright.txt](Copyright.txt) and
 [LICENSE.txt](LICENSE.txt) for details.
-

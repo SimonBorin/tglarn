@@ -9,8 +9,7 @@ Imported source path: `vendor/relarn/`
 Upstream project links:
 
 - ReLarn website: http://relarn.org
-- ReLarn official repository: https://gitlab.com/relarn/relarn
-- Imported source mirror: https://github.com/relarn/relarn
+- ReLarn source mirror: https://github.com/relarn/relarn
 - Known upstream contributors: `vendor/relarn/AUTHORS.txt`
 
 ReLarn is Copyright (C) 1986-2020 by The Authors.
