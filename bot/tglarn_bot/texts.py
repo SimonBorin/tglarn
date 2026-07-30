@@ -85,9 +85,9 @@ Cast Spell            cast a spell</pre>
 <b>Context Actions</b>
 Context buttons appear only when the current map state supports them.
 
-<pre>Descend          go down stairs
+<pre>Inspect          use stairs or a nearby object
 Close Door       close a nearby open door
-Identify Trap    identify a visible adjacent trap</pre>
+Identify Traps   identify visible adjacent traps</pre>
 
 <b>Game Menu</b>
 <pre>Inventory      show inventory
@@ -96,6 +96,7 @@ Wield Weapon   wield a weapon
 Wear Armor     wear armor
 Take Off       take off shield or armor
 Drop Item      drop an item
+Drop Gold      drop a chosen amount of gold
 Read Scroll    read a scroll
 Quaff Potion   quaff a potion
 Eat            eat something
@@ -110,7 +111,7 @@ There is no manual save/load flow in the Telegram version.
 
 Core loop:
 - explore the dungeon one turn at a time;
-- use descend / go down / > when standing on stairs to go deeper;
+- use Inspect while standing on stairs, then choose the contextual direction;
 - moving into a monster performs a melee attack;
 - spells, scrolls, potions, equipment, traps, doors, stairs, and contextual
   objects create most of the tactical choices;

@@ -428,6 +428,7 @@ def test_game_menu_contains_inventory_and_item_actions() -> None:
     assert "Wear Armor" in texts
     assert "Read Scroll" in texts
     assert "Quaff Potion" in texts
+    assert "Drop Gold" in texts
     assert "Teleport" in texts
     assert "Close Door" in texts
     assert "Identify Traps" in texts
@@ -435,6 +436,8 @@ def test_game_menu_contains_inventory_and_item_actions() -> None:
     assert "Scores" in texts
     assert "Native Help" in texts
     assert "Version" in texts
+    assert "Earlier Messages" in texts
+    assert "Later Messages" in texts
     assert "Legend" in texts
     assert texts[-3:] == ["Legend", "Main Menu", "Back to Game"]
     assert f"{CallbackData.GAME_PREFIX}inventory" in callback_data

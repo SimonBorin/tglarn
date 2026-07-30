@@ -379,6 +379,7 @@ def game_menu_keyboard() -> InlineKeyboardMarkup:
             ],
             [InlineKeyboardButton(text="Take Off", callback_data=_game_callback("take_off"))],
             [InlineKeyboardButton(text="Drop Item", callback_data=_game_callback("drop"))],
+            [InlineKeyboardButton(text="Drop Gold", callback_data=_game_callback("drop_gold"))],
             [
                 InlineKeyboardButton(text="Read Scroll", callback_data=_game_callback("read")),
                 InlineKeyboardButton(text="Quaff Potion", callback_data=_game_callback("quaff")),
@@ -394,6 +395,16 @@ def game_menu_keyboard() -> InlineKeyboardMarkup:
             ],
             [InlineKeyboardButton(text="Tax Status", callback_data=_game_callback("tax_status"))],
             [InlineKeyboardButton(text="Scores", callback_data=_game_callback("scores"))],
+            [
+                InlineKeyboardButton(
+                    text="Earlier Messages",
+                    callback_data=_game_callback("messages_back"),
+                ),
+                InlineKeyboardButton(
+                    text="Later Messages",
+                    callback_data=_game_callback("messages_forward"),
+                ),
+            ],
             [
                 InlineKeyboardButton(text="Native Help", callback_data=_game_callback("help")),
                 InlineKeyboardButton(text="Version", callback_data=_game_callback("version")),

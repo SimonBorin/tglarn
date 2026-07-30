@@ -297,12 +297,15 @@ _COMMAND_KEYS = {
     "help": b"?",
     "version": b"v",
     "scores": b"o",
+    "messages_back": b"\x10",
+    "messages_forward": b"\x0e",
 }
 
 _COMMAND_KEY_SEQUENCES = {
     "wield": [b"w", b"?"],
     "wear": [b"W", b"?"],
     "drop": [b"d", b"?"],
+    "drop_gold": [b"d", b"."],
     "read": [b"r", b"?"],
     "quaff": [b"q", b"?"],
     "eat": [b"e", b"?"],
