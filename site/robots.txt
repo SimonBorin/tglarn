@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://simonborin.github.io/tglarn/sitemap.xml
