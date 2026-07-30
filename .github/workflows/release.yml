@@ -160,6 +160,7 @@ jobs:
     environment: production
     env:
       VERSION: ${{ needs.version.outputs.version }}
+      RELEASE_TAG: ${{ needs.version.outputs.tag }}
       REVISION: ${{ needs.version.outputs.revision }}
       EC2_HOST: ${{ secrets.EC2_HOST }}
       EC2_USER: ${{ secrets.EC2_USER }}
@@ -174,6 +175,7 @@ jobs:
 
       - name: Validate deployment secrets
         run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ -n "$EC2_HOST" ]]
           [[ -n "$EC2_USER" ]]
           [[ -n "$EC2_SSH" ]]
@@ -219,7 +221,7 @@ jobs:
           context: .
           file: ./Containerfile
           platforms: ${{ steps.target.outputs.platform }}
-          tags: tglarn:${{ env.VERSION }}
+          tags: tglarn:${{ env.RELEASE_TAG }}
           build-args: |
             TGLARN_VERSION=${{ env.VERSION }}
             TGLARN_REVISION=${{ env.REVISION }}
@@ -261,7 +263,7 @@ jobs:
             -o StrictHostKeyChecking=accept-new \
             -o ServerAliveInterval=30 \
             "$EC2_USER@$EC2_HOST" \
-            "VERSION='$VERSION' sh -se" <<'REMOTE'
+            "VERSION='$VERSION' RELEASE_TAG='$RELEASE_TAG' sh -se" <<'REMOTE'
           docker_command() {
             if docker info >/dev/null 2>&1; then
               docker "$@"
@@ -270,7 +272,7 @@ jobs:
             fi
           }
 
-          image="tglarn:$VERSION"
+          image="tglarn:$RELEASE_TAG"
           archive="/tmp/tglarn-image.tar.gz"
           runtime_root="$HOME/tglarn-runtime"
           env_file="$runtime_root/bot.env"
