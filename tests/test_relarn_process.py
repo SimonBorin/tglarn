@@ -1,7 +1,9 @@
 import base64
 
+import pytest
 from tglarn_bot.keyboards import (
     CallbackData,
+    _game_callback,
     character_class_guide_keyboard,
     character_class_keyboard,
     character_gender_keyboard,
@@ -13,10 +15,12 @@ from tglarn_bot.keyboards import (
     map_view_keyboard,
     restart_confirmation_keyboard,
     rules_menu_keyboard,
+    run_menu_keyboard,
     spell_menu_keyboard,
 )
 from tglarn_game import GameResponse, PlaceholderGameAdapter
 from tglarn_game.relarn_process import (
+    _command_to_keys,
     _detect_prompt,
     _game_over_log_lines,
     _inventory_item_from_command,
@@ -57,6 +61,31 @@ def test_main_menu_contains_expected_actions() -> None:
         "About",
         "Repository",
     ]
+
+
+def test_item_commands_open_native_fullscreen_pickers() -> None:
+    assert _command_to_keys("wield") == [b"w", b"?"]
+    assert _command_to_keys("wear") == [b"W", b"?"]
+    assert _command_to_keys("drop") == [b"d", b"?"]
+    assert _command_to_keys("read") == [b"r", b"?"]
+    assert _command_to_keys("quaff") == [b"q", b"?"]
+    assert _command_to_keys("eat") == [b"e", b"?"]
+
+
+def test_extended_commands_map_to_native_relarn_keys() -> None:
+    assert _command_to_keys("wait") == [b"."]
+    assert _command_to_keys("run_northwest") == [b"Y"]
+    assert _command_to_keys("run_southeast") == [b"N"]
+    assert _command_to_keys("close_door") == [b"C"]
+    assert _command_to_keys("identify_traps") == [b"^"]
+    assert _command_to_keys("tax_status") == [b"P"]
+    assert _command_to_keys("help") == [b"?"]
+    assert _command_to_keys("version") == [b"v"]
+    assert _command_to_keys("scores") == [b"o"]
+    assert _command_to_keys("messages_back") == [b"\x10"]
+    assert _command_to_keys("messages_forward") == [b"\x0e"]
+    assert _command_to_keys("drop_gold") == [b"d", b"."]
+    assert _command_to_keys("descend") is None
 
 
 def test_intro_keyboard_starts_character_creation() -> None:
@@ -137,7 +166,7 @@ def test_game_keyboard_contains_default_controls() -> None:
     assert texts[:9] == ["NW", "N", "NE", "W", "Inspect", "E", "SW", "S", "SE"]
     assert "Spell" in texts
     assert "Menu" in texts
-    assert "Wait" not in texts
+    assert "Wait" in texts
     assert "Status" not in texts
     assert f"{CallbackData.GAME_PREFIX}north" in callback_data
     assert CallbackData.SPELL_MENU in callback_data
@@ -191,16 +220,43 @@ def test_game_menu_contains_inventory_and_item_actions() -> None:
 
     assert "Inventory" in texts
     assert "Pack Weight" in texts
+    assert "Run" in texts
     assert "Wield Weapon" in texts
     assert "Wear Armor" in texts
     assert "Read Scroll" in texts
     assert "Quaff Potion" in texts
     assert "Teleport" in texts
+    assert "Close Door" in texts
+    assert "Identify Traps" in texts
+    assert "Tax Status" in texts
+    assert "Scores" in texts
+    assert "Native Help" in texts
+    assert "Version" in texts
     assert "Legend" in texts
     assert texts[-3:] == ["Legend", "Main Menu", "Back to Game"]
     assert f"{CallbackData.GAME_PREFIX}inventory" in callback_data
     assert f"{CallbackData.GAME_PREFIX}teleport" in callback_data
     assert CallbackData.GAME_LEGEND in callback_data
+
+
+def test_run_menu_covers_all_native_run_directions() -> None:
+    callback_data = _button_callback_data(run_menu_keyboard())
+
+    assert {
+        f"{CallbackData.GAME_PREFIX}run_northwest",
+        f"{CallbackData.GAME_PREFIX}run_north",
+        f"{CallbackData.GAME_PREFIX}run_northeast",
+        f"{CallbackData.GAME_PREFIX}run_west",
+        f"{CallbackData.GAME_PREFIX}run_east",
+        f"{CallbackData.GAME_PREFIX}run_southwest",
+        f"{CallbackData.GAME_PREFIX}run_south",
+        f"{CallbackData.GAME_PREFIX}run_southeast",
+    }.issubset(callback_data)
+
+
+def test_game_callback_rejects_payloads_over_telegram_limit() -> None:
+    with pytest.raises(ValueError, match="64 bytes"):
+        _game_callback("x" * 60)
 
 
 def test_modal_rendering_removes_curses_picker_help() -> None:
@@ -531,9 +587,17 @@ def test_detect_prompt_extracts_dealer_picklist_options() -> None:
         "question": "Choose an item.",
         "kind": "indexed_picklist",
         "options": [
-            {"key": "0", "label": "Killer Speed One Hundred Bucks"},
-            {"key": "1", "label": "Groovy Acid Two Hundred Fifty Bucks"},
-            {"key": "2", "label": "Monster Hash Five Hundred Bucks"},
+            {"key": "0", "label": "Killer Speed One Hundred Bucks", "row_index": "0"},
+            {
+                "key": "1",
+                "label": "Groovy Acid Two Hundred Fifty Bucks",
+                "row_index": "1",
+            },
+            {
+                "key": "2",
+                "label": "Monster Hash Five Hundred Bucks",
+                "row_index": "2",
+            },
             {"key": "exit_store", "label": "Exit Store"},
         ],
         "store": True,
@@ -560,9 +624,9 @@ def test_detect_prompt_extracts_dnd_store_picklist_options() -> None:
         "question": "Choose an item.",
         "kind": "indexed_picklist",
         "options": [
-            {"key": "0", "label": "a spear Thirty Gold"},
-            {"key": "1", "label": "leather armor Fifty Gold"},
-            {"key": "2", "label": "a magic potion Ninety Gold"},
+            {"key": "0", "label": "a spear Thirty Gold", "row_index": "0"},
+            {"key": "1", "label": "leather armor Fifty Gold", "row_index": "1"},
+            {"key": "2", "label": "a magic potion Ninety Gold", "row_index": "2"},
             {"key": "exit_store", "label": "Exit Store"},
         ],
         "store": True,
@@ -715,6 +779,23 @@ def test_indexed_picklist_prompt_answers_move_to_selected_row() -> None:
     assert _prompt_answer_keys(answer, prompt) == [b"j", b"j", b"\n"]
 
 
+def test_indexed_store_selection_preserves_blank_category_rows() -> None:
+    prompt = _detect_prompt(
+        [
+            "Welcome to the Larn Thrift Shoppe.",
+            "Your gold: $144",
+            "     a spear                                  $30",
+            "",
+            "     leather armor                            $50",
+            "Up:k/CTRL+p/UP Down:j/CTRL+n/DOWN Select:ENTER Quit:ESC/CTRL+x",
+        ]
+    )
+
+    assert prompt is not None
+    assert prompt["options"][1]["row_index"] == "2"
+    assert _prompt_answer_keys("1", prompt) == [b"j", b"j", b"\n"]
+
+
 def test_indexed_store_exit_sends_escape() -> None:
     prompt = {
         "question": "Choose an item.",
@@ -796,6 +877,62 @@ def test_detect_prompt_extracts_inventory_items() -> None:
     ]
 
 
+def test_inventory_actions_reflect_equipped_state() -> None:
+    prompt = _detect_prompt(
+        [
+            "Inventory",
+            "Gold: $144",
+            "a.   a spear (weapon in hand)",
+            "b.   a shield (being worn)",
+            "c.   plate armor",
+        ]
+    )
+
+    assert prompt is not None
+    assert prompt["options"][0]["actions"] == [
+        {"key": "unwield:a", "label": "Unwield"},
+        {"key": "drop:a", "label": "Drop"},
+    ]
+    assert prompt["options"][1]["actions"] == [
+        {"key": "take_off:b", "label": "Take Off"},
+        {"key": "drop:b", "label": "Drop"},
+    ]
+    assert prompt["options"][2]["actions"] == [
+        {"key": "wear:c", "label": "Wear"},
+        {"key": "wield:c", "label": "Wield"},
+        {"key": "drop:c", "label": "Drop"},
+    ]
+
+
+def test_inventory_actions_do_not_guess_non_wieldable_charms() -> None:
+    prompt = _detect_prompt(
+        [
+            "Inventory",
+            "Gold: $144",
+            "a.   an amulet of invisibility",
+            "b.   a wand of wonder",
+        ]
+    )
+
+    assert prompt is not None
+    assert prompt["options"][0]["actions"] == [{"key": "drop:a", "label": "Drop"}]
+    assert prompt["options"][1]["actions"] == [{"key": "drop:b", "label": "Drop"}]
+
+
+def test_equipment_actions_send_exact_native_keys() -> None:
+    prompt = {
+        "question": "Choose an equipment action.",
+        "kind": "inventory_action",
+        "options": [
+            {"key": "unwield:a", "label": "Unwield"},
+            {"key": "take_off:b", "label": "Take Off"},
+        ],
+    }
+
+    assert _prompt_answer_keys("unwield:a", prompt) == [b"w", b"-"]
+    assert _prompt_answer_keys("take_off:b", prompt) == [b"T", b"b"]
+
+
 def test_inventory_prompt_selects_item_for_action_submenu() -> None:
     prompt = {
         "question": "Choose an inventory item.",
@@ -871,10 +1008,20 @@ def test_detect_prompt_extracts_number_prompt_options() -> None:
             {"key": "0", "label": "Zero"},
             {"key": "100", "label": "One Hundred"},
             {"key": "500", "label": "Five Hundred"},
-            {"key": "1000", "label": "One Thousand"},
             {"key": "max", "label": "Maximum"},
         ],
     }
+
+
+def test_detect_number_prompt_uses_native_maximum() -> None:
+    prompt = _detect_prompt(
+        [""] * 19 + ["How much do you donate? [0] (max 1234)"]
+    )
+
+    assert prompt is not None
+    assert prompt["default"] == 0
+    assert prompt["max"] == 1234
+    assert _prompt_answer_keys("max", prompt) == [b"1234", b"\n"]
 
 
 def test_number_prompt_accepts_button_and_text_answers() -> None:

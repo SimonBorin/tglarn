@@ -1,5 +1,8 @@
+import pytest
 from tglarn_bot.keyboards import (
     CallbackData,
+    _game_callback,
+    apply_number_pad_operation,
     character_class_guide_keyboard,
     character_class_keyboard,
     character_gender_keyboard,
@@ -9,8 +12,11 @@ from tglarn_bot.keyboards import (
     intro_keyboard,
     main_menu_keyboard,
     map_view_keyboard,
+    number_pad_keyboard,
+    parse_number_pad_callback,
     restart_confirmation_keyboard,
     rules_menu_keyboard,
+    run_menu_keyboard,
     spell_menu_keyboard,
 )
 from tglarn_game import GameAction, GameResponse, PlaceholderGameAdapter
@@ -112,7 +118,7 @@ def test_game_keyboard_contains_default_controls() -> None:
     assert texts[:9] == ["NW", "N", "NE", "W", "Inspect", "E", "SW", "S", "SE"]
     assert "Spell" in texts
     assert "Menu" in texts
-    assert "Wait" not in texts
+    assert "Wait" in texts
     assert "Status" not in texts
     assert f"{CallbackData.GAME_PREFIX}north" in callback_data
     assert CallbackData.SPELL_MENU in callback_data
@@ -332,14 +338,31 @@ def test_game_keyboard_renders_status_only_number_prompt_actions() -> None:
     texts = _button_texts(game_keyboard(response))
     callback_data = _button_callback_data(game_keyboard(response))
 
-    assert "Zero" in texts
-    assert "One Hundred" in texts
+    assert "Amount: 0" in texts
+    assert "1" in texts
+    assert "Backspace" in texts
+    assert "Submit" in texts
     assert "Maximum" in texts
     assert "Cancel" in texts
     assert "Main Menu" in texts
     assert f"{CallbackData.GAME_PREFIX}number:max" in callback_data
     assert f"{CallbackData.GAME_PREFIX}prompt:cancel" in callback_data
     assert f"{CallbackData.GAME_PREFIX}prompt:menu" in callback_data
+
+
+def test_number_pad_builds_and_parses_inline_drafts() -> None:
+    callback_data = _button_callback_data(number_pad_keyboard("42"))
+
+    assert "num:42:7" in callback_data
+    assert "num:42:back" in callback_data
+    assert "num:42:submit" in callback_data
+    assert parse_number_pad_callback("num:42:7") == ("42", "7")
+    assert parse_number_pad_callback("num:_:0") == ("", "0")
+    assert parse_number_pad_callback("num:1234567890123456789:submit") is None
+    assert apply_number_pad_operation("42", "7") == ("427", None)
+    assert apply_number_pad_operation("42", "back") == ("4", None)
+    assert apply_number_pad_operation("42", "submit") == ("42", "number:42")
+    assert apply_number_pad_operation("", "submit") == ("", "number:max")
 
 
 def test_game_keyboard_for_modal_prompt_omits_movement_controls() -> None:
@@ -400,13 +423,43 @@ def test_game_menu_contains_inventory_and_item_actions() -> None:
 
     assert "Inventory" in texts
     assert "Pack Weight" in texts
+    assert "Run" in texts
     assert "Wield Weapon" in texts
     assert "Wear Armor" in texts
     assert "Read Scroll" in texts
     assert "Quaff Potion" in texts
+    assert "Drop Gold" in texts
     assert "Teleport" in texts
+    assert "Close Door" in texts
+    assert "Identify Traps" in texts
+    assert "Tax Status" in texts
+    assert "Scores" in texts
+    assert "Native Help" in texts
+    assert "Version" in texts
+    assert "Earlier Messages" in texts
+    assert "Later Messages" in texts
     assert "Legend" in texts
     assert texts[-3:] == ["Legend", "Main Menu", "Back to Game"]
     assert f"{CallbackData.GAME_PREFIX}inventory" in callback_data
     assert f"{CallbackData.GAME_PREFIX}teleport" in callback_data
     assert CallbackData.GAME_LEGEND in callback_data
+
+
+def test_run_menu_covers_all_native_run_directions() -> None:
+    callback_data = _button_callback_data(run_menu_keyboard())
+
+    assert {
+        f"{CallbackData.GAME_PREFIX}run_northwest",
+        f"{CallbackData.GAME_PREFIX}run_north",
+        f"{CallbackData.GAME_PREFIX}run_northeast",
+        f"{CallbackData.GAME_PREFIX}run_west",
+        f"{CallbackData.GAME_PREFIX}run_east",
+        f"{CallbackData.GAME_PREFIX}run_southwest",
+        f"{CallbackData.GAME_PREFIX}run_south",
+        f"{CallbackData.GAME_PREFIX}run_southeast",
+    }.issubset(callback_data)
+
+
+def test_game_callback_rejects_payloads_over_telegram_limit() -> None:
+    with pytest.raises(ValueError, match="64 bytes"):
+        _game_callback("x" * 60)

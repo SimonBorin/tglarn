@@ -121,7 +121,7 @@ def test_game_keyboard_contains_default_controls() -> None:
     assert texts[:9] == ["NW", "N", "NE", "W", "Inspect", "E", "SW", "S", "SE"]
     assert "Spell" in texts
     assert "Menu" in texts
-    assert "Wait" not in texts
+    assert "Wait" in texts
     assert "Status" not in texts
     assert f"{CallbackData.GAME_PREFIX}north" in callback_data
     assert CallbackData.SPELL_MENU in callback_data
