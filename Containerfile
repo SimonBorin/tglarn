@@ -37,9 +37,19 @@ RUN rm -f vendor/relarn/src/relarn.bin vendor/relarn/src/deps.mk vendor/relarn/s
 
 FROM python:3.12-slim-bookworm AS runtime
 
+ARG TGLARN_VERSION=0.1.0
+ARG TGLARN_REVISION=unknown
+
+LABEL org.opencontainers.image.title="TGLarn" \
+    org.opencontainers.image.description="A classic roguelike adapted for Telegram" \
+    org.opencontainers.image.source="https://github.com/SimonBorin/tglarn" \
+    org.opencontainers.image.version="$TGLARN_VERSION" \
+    org.opencontainers.image.revision="$TGLARN_REVISION"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
+    TGLARN_VERSION="$TGLARN_VERSION" \
     RELARN_BINARY_PATH=/opt/relarn/lib/relarn/relarn.bin \
     RELARN_INSTALL_ROOT=/opt/relarn
 
