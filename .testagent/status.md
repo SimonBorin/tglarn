@@ -87,3 +87,57 @@ No uncovered survivor was found in the bounded changed-code review.
   repository links.
 - `test_bot_about_links_to_canonical_pages_site` and the existing About handler
   regression require `https://simonborin.github.io/tglarn/`.
+
+## Contextual Main Menu navigation validation
+
+- Full suite: **215 passed**.
+- Focused suite:
+  `tests/test_contextual_main_menu_navigation.py
+  tests/test_menu_regressions.py` — **24 passed**.
+- Ruff on both focused files and `git diff --check` — passed.
+
+### Requirement mapping
+
+- About, Plot, Legend, Rules, and Display Size full return sequences:
+  `test_contextual_section_return_restores_main_menu_with_game_menu_back`
+  (five parameter cases).
+- Controls and Game Mechanics detail -> Rules -> Main Menu sequences:
+  `test_contextual_rules_detail_return_restores_main_menu_with_game_menu_back`
+  (two parameter cases).
+- Invalid Display Size callback -> Main Menu:
+  `test_contextual_display_invalid_selection_return_restores_game_menu_back`.
+- Medium, Wide, and Max Size callbacks return to game controls without a
+  context-free Main Menu:
+  `test_contextual_display_valid_selection_returns_to_game_controls`
+  (three parameter cases).
+- Restart Game -> Cancel:
+  `test_contextual_restart_cancel_sequence_restores_main_menu_with_game_menu_back`.
+- `/start` and `/menu` remain context-free both initially and after an
+  About -> Main Menu return:
+  `test_context_free_commands_keep_main_menu_without_game_back` and
+  `test_context_free_command_section_return_stays_without_game_back`.
+- Photo-message replacement persists the replacement identity:
+  `test_contextual_main_menu_photo_replacement_records_new_message_identity`.
+
+### Gap and assertion-quality review
+
+- Every user-listed nested route is reached through callback data extracted
+  from the preceding rendered keyboard; no test bypasses the navigation path by
+  constructing its expected destination keyboard directly.
+- Exact bottom button text and `GAME_MENU` callback kill mutations that drop
+  Back, move it away from the bottom, or route it to the context-free menu.
+- Exact `active_game_message_matches(1001, 2002, 3003)` calls distinguish active
+  and context-free flows and kill wrong-message identity mutations.
+- Valid Display Size cases assert the secondary game-menu control and absence
+  of any direct `MAIN_MENU` callback.
+- The photo replacement case asserts answer, old-message deletion, and exact
+  persisted replacement IDs `(5005, 6006)`.
+- No uncovered user-listed route or weak/tautological assertion was found in
+  the bounded review.
+- Two high-risk mutations were injected and empirically killed by the focused
+  regressions: forcing `show_back=False` failed all five contextual section
+  cases, and removing active-message identity persistence failed the photo
+  replacement case. Both mutations were reverted before the final green run.
+- The generated file has no assertion-free or trivial-only tests. Its
+  assertions cover exact values and structure, negative absence, and observable
+  side effects through awaited mock calls.

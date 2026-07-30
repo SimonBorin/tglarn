@@ -79,3 +79,24 @@ pairing run.
   is `https://github.com/SimonBorin/tglarn`.
 - `bot/tglarn_bot/texts.py` owns the About template. The canonical Pages URL is
   `https://simonborin.github.io/tglarn/`.
+
+## Contextual Main Menu navigation extension
+
+- Context is message-scoped, not callback-token-scoped:
+  `session_service.active_game_message_matches(user_id, chat_id, message_id)`
+  identifies whether the edited message belongs to the active in-game flow.
+- The same `CallbackData.MAIN_MENU` route must therefore render either the
+  ordinary menu or a contextual menu whose bottom Back action targets
+  `CallbackData.GAME_MENU`.
+- About, Plot, Legend, Rules, rule details, Display Size, invalid display
+  selection, and restart cancellation all edit the same message. Their local
+  navigation may remain unchanged, but following it back to Main Menu must
+  re-evaluate the active-message context and restore the bottom game-menu Back.
+- Valid Display Size selection intentionally returns to the game response. Its
+  keyboard must expose `Menu -> GAME_MENU` and contain no direct context-free
+  Main Menu callback.
+- `/start` and `/menu` are new message commands rather than callbacks on the
+  active game message, so they legitimately render the context-free Main Menu.
+- A photo-to-text Main Menu transition replaces the Telegram message. The
+  replacement chat/message ID must become the active game message immediately;
+  otherwise the next nested return is misclassified as context-free.

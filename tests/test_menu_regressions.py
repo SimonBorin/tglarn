@@ -75,15 +75,20 @@ def test_game_main_menu_keeps_resume_and_adds_bottom_back_to_game_menu() -> None
         for button in row
         if button.text == "Main Menu"
     )
-    assert game_menu_main_button.callback_data == CallbackData.GAME_MAIN_MENU
+    assert game_menu_main_button.callback_data == CallbackData.MAIN_MENU
 
 
 @pytest.mark.asyncio
 async def test_game_main_menu_callback_renders_contextual_back_path() -> None:
-    dispatcher = _dispatcher_with_handlers(SimpleNamespace())
-    handler = _registered_callback_handlers(dispatcher)["game_main_menu_callback"]
+    dispatcher = _dispatcher_with_handlers(
+        SimpleNamespace(
+            active_game_message_matches=AsyncMock(return_value=True),
+            set_active_game_message=AsyncMock(),
+        )
+    )
+    handler = _registered_callback_handlers(dispatcher)["main_menu_callback"]
     message = _editable_message()
-    callback = _callback(message, data=CallbackData.GAME_MAIN_MENU)
+    callback = _callback(message, data=CallbackData.MAIN_MENU)
 
     await handler(callback)
 
@@ -131,7 +136,9 @@ def test_main_menu_separates_plot_from_project_about() -> None:
 
 @pytest.mark.asyncio
 async def test_plot_and_about_callbacks_show_distinct_content() -> None:
-    dispatcher = _dispatcher_with_handlers(SimpleNamespace())
+    dispatcher = _dispatcher_with_handlers(
+        SimpleNamespace(active_game_message_matches=AsyncMock(return_value=False))
+    )
     handlers = _registered_callback_handlers(dispatcher)
 
     plot_message = _editable_message()
