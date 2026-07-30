@@ -82,6 +82,9 @@ def test_extended_commands_map_to_native_relarn_keys() -> None:
     assert _command_to_keys("help") == [b"?"]
     assert _command_to_keys("version") == [b"v"]
     assert _command_to_keys("scores") == [b"o"]
+    assert _command_to_keys("messages_back") == [b"\x10"]
+    assert _command_to_keys("messages_forward") == [b"\x0e"]
+    assert _command_to_keys("drop_gold") == [b"d", b"."]
     assert _command_to_keys("descend") is None
 
 
