@@ -50,3 +50,19 @@ pairing run.
   and `/terms`.
 - `tests/test_support.py` uses an in-memory dispatcher and mocks, with no
   network or database access.
+
+## Menu regression extension
+
+- `bot/tglarn_bot/keyboards.py` owns the main-menu, game-menu, Plot, About,
+  support, and back-navigation button structures.
+- `bot/tglarn_bot/handlers.py` decides whether Resume renders the current game
+  directly or schedules the new-game splash animation.
+- `bot/tglarn_bot/__init__.py` exposes the deployed `TGLARN_VERSION`; About must
+  render that runtime value instead of a separately maintained literal.
+- Existing callback-handler tests use an in-memory `Dispatcher`,
+  `SimpleNamespace` Telegram objects, and `AsyncMock` methods. This permits
+  regression coverage without Telegram, MongoDB, or a running ReLarn process.
+- Telegram invoices are separate messages when sent with `answer_invoice`.
+  Reusing the current support message therefore requires an invoice-link flow:
+  create the link via the bot, then edit the existing support message with the
+  payment action and a Back path.

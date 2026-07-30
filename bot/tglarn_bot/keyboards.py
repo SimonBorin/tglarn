@@ -35,12 +35,13 @@ _BUTTON_TEXT_REPLACEMENTS = {
 class CallbackData:
     START_GAME = "menu:start_game"
     MAIN_MENU = "menu:main"
+    GAME_MAIN_MENU = "game_menu:main"
+    PLOT = "menu:plot"
     ABOUT = "menu:about"
     LEGEND = "menu:legend"
     RULES = "menu:rules"
     RULES_CONTROLS = "rules:controls"
     RULES_MECHANICS = "rules:mechanics"
-    REPOSITORY = "menu:repository"
     MAP_VIEW = "menu:map_view"
     RESTART_REQUEST = "restart:request"
     RESTART_CONFIRM = "restart:confirm"
@@ -64,18 +65,19 @@ class CallbackData:
     NUMBER_PAD_PREFIX = "num:"
 
 
-def main_menu_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Resume Game", callback_data=CallbackData.START_GAME)],
-            [InlineKeyboardButton(text="Restart Game", callback_data=CallbackData.RESTART_REQUEST)],
-            [InlineKeyboardButton(text="Rules", callback_data=CallbackData.RULES)],
-            [InlineKeyboardButton(text="Legend", callback_data=CallbackData.LEGEND)],
-            [InlineKeyboardButton(text="Display Size", callback_data=CallbackData.MAP_VIEW)],
-            [InlineKeyboardButton(text="About", callback_data=CallbackData.ABOUT)],
-            [InlineKeyboardButton(text="Repository", callback_data=CallbackData.REPOSITORY)],
-        ]
-    )
+def main_menu_keyboard(show_back: bool = False) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text="Resume Game", callback_data=CallbackData.START_GAME)],
+        [InlineKeyboardButton(text="Restart Game", callback_data=CallbackData.RESTART_REQUEST)],
+        [InlineKeyboardButton(text="Rules", callback_data=CallbackData.RULES)],
+        [InlineKeyboardButton(text="Legend", callback_data=CallbackData.LEGEND)],
+        [InlineKeyboardButton(text="Display Size", callback_data=CallbackData.MAP_VIEW)],
+        [InlineKeyboardButton(text="Plot", callback_data=CallbackData.PLOT)],
+        [InlineKeyboardButton(text="About", callback_data=CallbackData.ABOUT)],
+    ]
+    if show_back:
+        rows.append([InlineKeyboardButton(text="Back", callback_data=CallbackData.GAME_MENU)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def intro_keyboard() -> InlineKeyboardMarkup:
@@ -202,15 +204,6 @@ def map_view_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="Wide", callback_data=CallbackData.VIEW_WIDE),
             ],
             [InlineKeyboardButton(text="Max Size", callback_data=CallbackData.VIEW_MAX)],
-            [InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.MAIN_MENU)],
-        ]
-    )
-
-
-def repository_keyboard(repository_url: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Open Repository", url=repository_url)],
             [InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.MAIN_MENU)],
         ]
     )
@@ -395,6 +388,16 @@ def support_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def support_invoice_keyboard(amount: int, invoice_url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"Pay ⭐ {amount}", url=invoice_url)],
+            [InlineKeyboardButton(text="Back", callback_data=CallbackData.SUPPORT)],
+            [InlineKeyboardButton(text="Back to Game", callback_data=CallbackData.BACK_TO_GAME)],
+        ]
+    )
+
+
 def game_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -444,7 +447,7 @@ def game_menu_keyboard() -> InlineKeyboardMarkup:
                     callback_data=CallbackData.SUPPORT,
                 )
             ],
-            [InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.MAIN_MENU)],
+            [InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.GAME_MAIN_MENU)],
             [InlineKeyboardButton(text="Back to Game", callback_data=CallbackData.BACK_TO_GAME)],
         ]
     )

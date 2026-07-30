@@ -242,7 +242,6 @@ jobs:
             printf 'LOG_LEVEL=INFO\n'
             printf 'DATABASE_STARTUP_ATTEMPTS=30\n'
             printf 'DATABASE_STARTUP_DELAY_SECONDS=2\n'
-            printf 'REPOSITORY_URL=https://github.com/%s\n' "$GITHUB_REPOSITORY"
           } >/tmp/tglarn-bot.env
 
       - name: Upload image and configuration

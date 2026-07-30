@@ -7,6 +7,7 @@ from tglarn_bot.handlers import register_handlers
 from tglarn_bot.keyboards import (
     CallbackData,
     game_menu_keyboard,
+    support_invoice_keyboard,
     support_keyboard,
 )
 from tglarn_bot.payments import (
@@ -15,7 +16,7 @@ from tglarn_bot.payments import (
     parse_support_invoice_payload,
     support_invoice_payload,
 )
-from tglarn_bot.texts import SUPPORT_TEXT
+from tglarn_bot.texts import SUPPORT_STARS_TEXT, SUPPORT_TEXT
 
 
 def _registered_handlers(dispatcher, observer_name):
@@ -92,26 +93,51 @@ async def test_support_callback_opens_support_submenu() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("amount", SUPPORT_STAR_AMOUNTS)
-async def test_stars_callback_sends_exact_xtr_invoice(amount: int) -> None:
+async def test_stars_callback_reuses_current_message_with_invoice_link(amount: int) -> None:
     dispatcher = _dispatcher_with_handlers()
     handler = _registered_handlers(dispatcher, "callback_query")["support_stars_callback"]
-    message = SimpleNamespace(answer_invoice=AsyncMock())
+    invoice_url = f"https://t.me/$tglarn-{amount}"
+    bot = SimpleNamespace(create_invoice_link=AsyncMock(return_value=invoice_url))
+    message = SimpleNamespace(
+        answer=AsyncMock(),
+        answer_invoice=AsyncMock(),
+        edit_text=AsyncMock(),
+        photo=None,
+    )
     callback = SimpleNamespace(
         data=f"{CallbackData.SUPPORT_STARS_PREFIX}{amount}",
         answer=AsyncMock(),
         message=message,
+        bot=bot,
+        from_user=None,
     )
 
     await handler(callback)
 
-    message.answer_invoice.assert_awaited_once()
-    invoice = message.answer_invoice.await_args.kwargs
+    bot.create_invoice_link.assert_awaited_once()
+    invoice = bot.create_invoice_link.await_args.kwargs
     assert invoice["currency"] == "XTR"
     assert invoice["provider_token"] == ""
     assert invoice["payload"] == f"tglarn-support:{amount}"
     assert [(price.label, price.amount) for price in invoice["prices"]] == [
         ("Support TGLarn", amount)
     ]
+    message.edit_text.assert_awaited_once_with(
+        SUPPORT_STARS_TEXT.format(stars=amount),
+        reply_markup=support_invoice_keyboard(amount, invoice_url),
+    )
+    message.answer_invoice.assert_not_awaited()
+    message.answer.assert_not_awaited()
+
+    markup = message.edit_text.await_args.kwargs["reply_markup"]
+    back_button = next(
+        button
+        for row in markup.inline_keyboard
+        for button in row
+        if button.text == "Back"
+    )
+    assert back_button.text == "Back"
+    assert back_button.callback_data == CallbackData.SUPPORT
 
 
 @pytest.mark.parametrize("amount", SUPPORT_STAR_AMOUNTS)
