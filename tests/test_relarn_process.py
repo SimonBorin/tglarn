@@ -844,6 +844,62 @@ def test_detect_prompt_extracts_inventory_items() -> None:
     ]
 
 
+def test_inventory_actions_reflect_equipped_state() -> None:
+    prompt = _detect_prompt(
+        [
+            "Inventory",
+            "Gold: $144",
+            "a.   a spear (weapon in hand)",
+            "b.   a shield (being worn)",
+            "c.   plate armor",
+        ]
+    )
+
+    assert prompt is not None
+    assert prompt["options"][0]["actions"] == [
+        {"key": "unwield:a", "label": "Unwield"},
+        {"key": "drop:a", "label": "Drop"},
+    ]
+    assert prompt["options"][1]["actions"] == [
+        {"key": "take_off:b", "label": "Take Off"},
+        {"key": "drop:b", "label": "Drop"},
+    ]
+    assert prompt["options"][2]["actions"] == [
+        {"key": "wear:c", "label": "Wear"},
+        {"key": "wield:c", "label": "Wield"},
+        {"key": "drop:c", "label": "Drop"},
+    ]
+
+
+def test_inventory_actions_do_not_guess_non_wieldable_charms() -> None:
+    prompt = _detect_prompt(
+        [
+            "Inventory",
+            "Gold: $144",
+            "a.   an amulet of invisibility",
+            "b.   a wand of wonder",
+        ]
+    )
+
+    assert prompt is not None
+    assert prompt["options"][0]["actions"] == [{"key": "drop:a", "label": "Drop"}]
+    assert prompt["options"][1]["actions"] == [{"key": "drop:b", "label": "Drop"}]
+
+
+def test_equipment_actions_send_exact_native_keys() -> None:
+    prompt = {
+        "question": "Choose an equipment action.",
+        "kind": "inventory_action",
+        "options": [
+            {"key": "unwield:a", "label": "Unwield"},
+            {"key": "take_off:b", "label": "Take Off"},
+        ],
+    }
+
+    assert _prompt_answer_keys("unwield:a", prompt) == [b"w", b"-"]
+    assert _prompt_answer_keys("take_off:b", prompt) == [b"T", b"b"]
+
+
 def test_inventory_prompt_selects_item_for_action_submenu() -> None:
     prompt = {
         "question": "Choose an inventory item.",

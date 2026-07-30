@@ -407,18 +407,7 @@ player_action(char key) {
         break;
 
     case 'T':
-        if (UU.shield != -1) {
-            UU.shield = -1;
-            say("Your shield is off.\n");
-        } else {
-            if (UU.wear != -1) {
-                UU.wear = -1;
-                say("Your armor is off.\n");
-            }
-            else {
-                say("You aren't wearing anything.\n");
-            }
-        }
+        takeoff();
         break;
 
     case 'P':
