@@ -15,6 +15,10 @@ on:
       - vendor/relarn/**
   workflow_dispatch:
     inputs:
+      release_tag:
+        description: Existing vX.Y.Z tag to redeploy without creating a new release
+        required: false
+        type: string
       bump:
         description: SemVer component to increment
         required: true
@@ -118,16 +122,24 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BUMP: ${{ steps.bump.outputs.bump }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
         run: |
-          existing=""
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            existing="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
-          fi
-
-          if [[ "$existing" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            version="${existing#v}"
+          if [[ -n "$REQUESTED_TAG" ]]; then
+            [[ "$EVENT_NAME" == "workflow_dispatch" ]]
+            [[ "$REQUESTED_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            git rev-parse "$REQUESTED_TAG^{commit}" >/dev/null
+            version="${REQUESTED_TAG#v}"
           else
-            version="$(python scripts/next_version.py --bump "$BUMP")"
+            existing=""
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              existing="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+            fi
+
+            if [[ "$existing" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              version="${existing#v}"
+            else
+              version="$(python scripts/next_version.py --bump "$BUMP")"
+            fi
           fi
 
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
@@ -136,13 +148,25 @@ jobs:
 
       - name: Record revision
         id: revision
-        run: echo "revision=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git rev-parse "$TAG^{commit}" >/dev/null 2>&1; then
+            revision="$(git rev-list -n 1 "$TAG")"
+          else
+            revision="$(git rev-parse HEAD)"
+          fi
+          echo "revision=$revision" >>"$GITHUB_OUTPUT"
 
       - name: Push release tag
         env:
           TAG: ${{ steps.version.outputs.tag }}
+          REDEPLOY_TAG: ${{ inputs.release_tag }}
         run: |
           if git rev-parse "$TAG" >/dev/null 2>&1; then
+            if [[ -n "$REDEPLOY_TAG" ]]; then
+              exit 0
+            fi
             [[ "$(git rev-list -n 1 "$TAG")" == "$(git rev-parse HEAD)" ]]
             exit 0
           fi
@@ -227,7 +251,7 @@ jobs:
             TGLARN_REVISION=${{ env.REVISION }}
           outputs: type=docker,dest=/tmp/tglarn-image.tar
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,ignore-error=true
 
       - name: Prepare deployment files
         run: |
