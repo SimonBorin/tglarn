@@ -5,6 +5,8 @@ import re
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from tglarn_game import GameAction, GameResponse
 
+from .payments import SUPPORT_STAR_AMOUNTS
+
 CHARACTER_CLASSES = (
     ("Ogre", "ogre"),
     ("Wizard", "wizard"),
@@ -53,6 +55,9 @@ class CallbackData:
     GAME_PREFIX = "game:"
     GAME_MENU = "game_menu:open"
     GAME_LEGEND = "game_menu:legend"
+    SUPPORT = "game_menu:support"
+    SUPPORT_TERMS = "support:terms"
+    SUPPORT_STARS_PREFIX = "support:stars:"
     BACK_TO_GAME = "game_menu:back"
     SPELL_MENU = "spell:open"
     RUN_MENU = "run:open"
@@ -367,6 +372,29 @@ def game_legend_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def support_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="☕ Support on Ko-fi",
+                    url="https://ko-fi.com/mrblooomberg",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"⭐ {amount}",
+                    callback_data=f"{CallbackData.SUPPORT_STARS_PREFIX}{amount}",
+                )
+                for amount in SUPPORT_STAR_AMOUNTS
+            ],
+            [InlineKeyboardButton(text="Terms", callback_data=CallbackData.SUPPORT_TERMS)],
+            [InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.MAIN_MENU)],
+            [InlineKeyboardButton(text="Back to Game", callback_data=CallbackData.BACK_TO_GAME)],
+        ]
+    )
+
+
 def game_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -410,6 +438,12 @@ def game_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="Version", callback_data=_game_callback("version")),
             ],
             [InlineKeyboardButton(text="Legend", callback_data=CallbackData.GAME_LEGEND)],
+            [
+                InlineKeyboardButton(
+                    text="⭐ Support Development ⭐",
+                    callback_data=CallbackData.SUPPORT,
+                )
+            ],
             [InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.MAIN_MENU)],
             [InlineKeyboardButton(text="Back to Game", callback_data=CallbackData.BACK_TO_GAME)],
         ]

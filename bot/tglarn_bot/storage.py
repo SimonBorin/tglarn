@@ -26,6 +26,7 @@ class MongoSessionStore:
         self._players: AsyncCollection[dict[str, Any]] = self._db["players"]
         self._sessions: AsyncCollection[dict[str, Any]] = self._db["sessions"]
         self._turns: AsyncCollection[dict[str, Any]] = self._db["turns"]
+        self._support_payments: AsyncCollection[dict[str, Any]] = self._db["support_payments"]
 
     async def ping(self) -> None:
         await self._client.admin.command("ping")
@@ -38,6 +39,32 @@ class MongoSessionStore:
         await self._sessions.create_index("telegram_user_id", unique=True)
         await self._turns.create_index(
             [("telegram_user_id", ASCENDING), ("created_at", ASCENDING)]
+        )
+        await self._support_payments.create_index("telegram_payment_charge_id", unique=True)
+
+    async def record_support_payment(
+        self,
+        telegram_user_id: int,
+        invoice_payload: str,
+        currency: str,
+        total_amount: int,
+        telegram_payment_charge_id: str,
+        provider_payment_charge_id: str,
+    ) -> None:
+        await self._support_payments.update_one(
+            {"telegram_payment_charge_id": telegram_payment_charge_id},
+            {
+                "$setOnInsert": {
+                    "telegram_user_id": telegram_user_id,
+                    "invoice_payload": invoice_payload,
+                    "currency": currency,
+                    "total_amount": total_amount,
+                    "telegram_payment_charge_id": telegram_payment_charge_id,
+                    "provider_payment_charge_id": provider_payment_charge_id,
+                    "created_at": _utcnow(),
+                }
+            },
+            upsert=True,
         )
 
     async def ensure_session(
