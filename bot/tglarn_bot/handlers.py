@@ -154,21 +154,12 @@ def register_handlers(
     async def text_game_command(message: Message) -> None:
         await _handle_text_game_command(message, session_service, animations)
 
+    @router.callback_query(F.data == CallbackData.GAME_MAIN_MENU)
     @router.callback_query(F.data == CallbackData.MAIN_MENU)
     async def main_menu_callback(callback: CallbackQuery) -> None:
         await _answer_callback(callback)
         _cancel_callback_animation(callback, animations)
-        await _edit_callback_message(callback, MAIN_MENU_TEXT, main_menu_keyboard())
-
-    @router.callback_query(F.data == CallbackData.GAME_MAIN_MENU)
-    async def game_main_menu_callback(callback: CallbackQuery) -> None:
-        await _answer_callback(callback)
-        _cancel_callback_animation(callback, animations)
-        await _edit_callback_message(
-            callback,
-            MAIN_MENU_TEXT,
-            main_menu_keyboard(show_back=True),
-        )
+        await _edit_main_menu_callback(callback, session_service)
 
     @router.callback_query(F.data == CallbackData.START_GAME)
     async def start_game_callback(callback: CallbackQuery) -> None:
@@ -414,7 +405,7 @@ def register_handlers(
     @router.callback_query(F.data == CallbackData.RESTART_CANCEL)
     async def restart_cancel_callback(callback: CallbackQuery) -> None:
         await _answer_callback(callback)
-        await _edit_callback_message(callback, MAIN_MENU_TEXT, main_menu_keyboard())
+        await _edit_main_menu_callback(callback, session_service)
 
     @router.callback_query(F.data == CallbackData.RESTART_CONFIRM)
     async def restart_confirm_callback(callback: CallbackQuery) -> None:
@@ -544,6 +535,30 @@ async def _ensure_user_session(message: Message, session_service: GameSessionSer
             message.from_user.id,
             *_user_profile(message.from_user),
         )
+
+
+async def _edit_main_menu_callback(
+    callback: CallbackQuery,
+    session_service: GameSessionService,
+) -> None:
+    telegram_user_id = _telegram_user_id(callback)
+    message = callback.message
+    is_game_message = (
+        telegram_user_id is not None
+        and message is not None
+        and await session_service.active_game_message_matches(
+            telegram_user_id,
+            message.chat.id,
+            message.message_id,
+        )
+    )
+    edited_message = await _edit_callback_message(
+        callback,
+        MAIN_MENU_TEXT,
+        main_menu_keyboard(show_back=is_game_message),
+    )
+    if is_game_message:
+        await _remember_callback_game_message(callback, session_service, edited_message)
 
 
 async def _handle_text_game_command(

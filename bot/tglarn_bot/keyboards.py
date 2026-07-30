@@ -447,7 +447,7 @@ def game_menu_keyboard() -> InlineKeyboardMarkup:
                     callback_data=CallbackData.SUPPORT,
                 )
             ],
-            [InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.GAME_MAIN_MENU)],
+            [InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.MAIN_MENU)],
             [InlineKeyboardButton(text="Back to Game", callback_data=CallbackData.BACK_TO_GAME)],
         ]
     )

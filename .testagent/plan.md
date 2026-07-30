@@ -66,3 +66,25 @@
 3. Format the bot About template and require the canonical Pages URL.
 4. Run the new static tests together with the existing About callback
    regression, then run Ruff and `git diff --check`.
+
+## Contextual Main Menu navigation extension
+
+1. Build each regression as a callback sequence beginning with Game Menu,
+   selecting the Main Menu button rendered by that handler, and invoking the
+   generic Main Menu callback on the same active message.
+2. Parameterize About, Plot, Legend, Rules, and Display Size; follow each
+   section's rendered Main Menu control and assert the restored Main Menu ends
+   in `Back -> GAME_MENU`.
+3. Traverse both Rules details through Rules and then Main Menu, asserting that
+   context survives every edit.
+4. Traverse invalid and all valid Display Size selections. Invalid selection
+   must keep the contextual Back; valid selections must return to game controls
+   without introducing a context-free Main Menu callback.
+5. Traverse Restart Game -> Cancel and assert the restored Main Menu retains
+   its bottom game-menu Back.
+6. Invoke `/start` and `/menu` handlers with inactive context and assert they
+   remain context-free.
+7. Force the active photo-message replacement path and assert the newly sent
+   chat/message identity is persisted before the next click.
+8. Run focused pytest and Ruff, then perform mutation-oriented gap and
+   assertion-quality review.
