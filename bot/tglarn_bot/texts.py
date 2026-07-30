@@ -6,6 +6,28 @@ All in-game and menu text must stay in English.
 MAIN_MENU_TEXT = """<b>TGLarn</b>
 Choose an action."""
 
+SUPPORT_TEXT = """<b>Support Development</b>
+TGLarn is free to play. Support is voluntary and does not unlock gameplay benefits.
+
+You can buy the developer a coffee on Ko-fi or send Telegram Stars below.
+By continuing with a Stars payment, you agree to the support terms."""
+
+SUPPORT_TERMS_TEXT = """<b>Support Terms</b>
+Payments are voluntary support for TGLarn development. They do not purchase
+in-game items, access, or other rewards.
+
+For payment questions or refund requests, use /paysupport. Telegram support
+cannot resolve purchases made through this bot."""
+
+PAY_SUPPORT_TEXT = """<b>Payment Support</b>
+For a Telegram Stars payment question or refund request, contact @blooomberg
+and include the approximate payment date and Star amount.
+
+Telegram support cannot resolve purchases made through this bot."""
+
+SUPPORT_THANK_YOU_TEXT = """<b>Thank you!</b>
+Your support of {stars} Telegram Stars helps keep TGLarn development going."""
+
 ABOUT_TEXT = """<b>About</b>
 Your daughter is dying from a strange disease, and ordinary remedies have failed.
 

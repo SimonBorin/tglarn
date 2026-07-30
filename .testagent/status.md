@@ -37,3 +37,12 @@ No uncovered survivor was found in the bounded changed-code review.
   numeric drafts, blank numeric submission, and oversized callback payloads.
 - No assertion-free, tautological, sleep-based, or exception-swallowing test
   was introduced.
+
+## Development support validation
+
+- `tests/test_support.py`: 21 focused tests passed.
+- Full suite: 188 tests passed.
+- Ruff and `git diff --check`: passed.
+- Regressions cover exact button order and URL, Stars invoice fields,
+  pre-checkout tampering, payment persistence and thanks, `/paysupport`, and
+  `/terms`.

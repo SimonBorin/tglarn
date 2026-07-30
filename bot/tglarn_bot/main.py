@@ -46,6 +46,8 @@ async def main() -> None:
             [
                 BotCommand(command="start", description="Open the main menu"),
                 BotCommand(command="menu", description="Open the main menu"),
+                BotCommand(command="terms", description="View support payment terms"),
+                BotCommand(command="paysupport", description="Get help with a Stars payment"),
             ]
         )
         await bot.delete_webhook(drop_pending_updates=True)
