@@ -52,10 +52,6 @@ class Settings(BaseSettings):
         default=180.0,
         alias="ACTIVE_SESSION_TTL_SECONDS",
     )
-    repository_url: str = Field(
-        default="https://github.com/SimonBorin/tglarn",
-        alias="REPOSITORY_URL",
-    )
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     database_startup_attempts: int = Field(default=30, alias="DATABASE_STARTUP_ATTEMPTS")
     database_startup_delay_seconds: float = Field(

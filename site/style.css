@@ -385,6 +385,52 @@ h1 {
   font-size: 0.98rem;
 }
 
+.beta-notice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: clamp(32px, 6vw, 90px);
+  align-items: center;
+  margin-bottom: clamp(50px, 7vw, 96px);
+  padding: clamp(28px, 4vw, 48px);
+  border: 1px solid rgba(241, 196, 95, 0.48);
+  background:
+    radial-gradient(circle at 92% 10%, rgba(241, 196, 95, 0.15), transparent 22rem),
+    var(--panel);
+}
+
+.beta-notice h2 {
+  margin-bottom: 18px;
+  font-family: var(--mono);
+  font-size: clamp(2rem, 3.6vw, 3.8rem);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.beta-notice p:last-child {
+  max-width: 780px;
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.beta-actions {
+  display: grid;
+  gap: 12px;
+  min-width: min(100%, 230px);
+}
+
+.beta-primary {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: #171207;
+}
+
+.beta-primary:hover,
+.beta-primary:focus-visible {
+  background: #ffdb82;
+}
+
 .product-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -442,6 +488,14 @@ h1 {
 
   .hero-stage {
     width: min(820px, 100%);
+  }
+
+  .beta-notice {
+    grid-template-columns: 1fr;
+  }
+
+  .beta-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .product-strip {
@@ -503,6 +557,15 @@ h1 {
   }
 
   .product-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .beta-notice {
+    margin-bottom: 56px;
+    padding: 28px 20px;
+  }
+
+  .beta-actions {
     grid-template-columns: 1fr;
   }
 

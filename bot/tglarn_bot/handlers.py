@@ -6,7 +6,7 @@ from collections.abc import Coroutine
 from html import escape
 from typing import Any, cast
 
-from aiogram import Dispatcher, F, Router
+from aiogram import Bot, Dispatcher, F, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
@@ -19,6 +19,7 @@ from aiogram.types import (
     User,
 )
 
+from . import __version__
 from .animations import (
     CREDITS_DELAY_SECONDS,
     SPLASH_CAPTIONS,
@@ -44,12 +45,12 @@ from .keyboards import (
     map_view_keyboard,
     number_pad_keyboard,
     parse_number_pad_callback,
-    repository_keyboard,
     restart_confirmation_keyboard,
     rules_detail_keyboard,
     rules_menu_keyboard,
     run_menu_keyboard,
     spell_menu_keyboard,
+    support_invoice_keyboard,
     support_keyboard,
 )
 from .map_image import cleanup_rendered_game_image, render_game_image
@@ -75,10 +76,11 @@ from .texts import (
     MAP_VIEW_TEXT,
     MAP_VIEW_UPDATED_TEXT,
     PAY_SUPPORT_TEXT,
-    REPOSITORY_TEXT,
+    PLOT_TEXT,
     RESTART_CONFIRM_TEXT,
     RULES_MENU_TEXT,
     SPELL_MENU_TEXT,
+    SUPPORT_STARS_TEXT,
     SUPPORT_TERMS_TEXT,
     SUPPORT_TEXT,
     SUPPORT_THANK_YOU_TEXT,
@@ -89,7 +91,7 @@ _VALID_MAP_VIEWS = {"medium", "wide", "max"}
 
 def register_handlers(
     dispatcher: Dispatcher,
-    settings: Settings,
+    _settings: Settings,
     session_service: GameSessionService,
 ) -> None:
     router = Router(name="chat_menu")
@@ -158,9 +160,20 @@ def register_handlers(
         _cancel_callback_animation(callback, animations)
         await _edit_callback_message(callback, MAIN_MENU_TEXT, main_menu_keyboard())
 
+    @router.callback_query(F.data == CallbackData.GAME_MAIN_MENU)
+    async def game_main_menu_callback(callback: CallbackQuery) -> None:
+        await _answer_callback(callback)
+        _cancel_callback_animation(callback, animations)
+        await _edit_callback_message(
+            callback,
+            MAIN_MENU_TEXT,
+            main_menu_keyboard(show_back=True),
+        )
+
     @router.callback_query(F.data == CallbackData.START_GAME)
     async def start_game_callback(callback: CallbackQuery) -> None:
         await _answer_callback(callback)
+        _cancel_callback_animation(callback, animations)
         telegram_user_id = _telegram_user_id(callback)
         if telegram_user_id is None:
             return
@@ -183,17 +196,12 @@ def register_handlers(
             username,
             display_name,
         )
-        animations.start(
-            telegram_user_id,
-            _play_start_splash(
-                callback=callback,
-                text=None,
-                reply_markup=game_keyboard(response),
-                session_service=session_service,
-                telegram_user_id=telegram_user_id,
-                game_response=response,
-            ),
+        edited_message = await _edit_callback_game_response(
+            callback,
+            response,
+            game_keyboard(response),
         )
+        await _remember_callback_game_message(callback, session_service, edited_message)
 
     @router.callback_query(F.data == CallbackData.CHARACTER_INTRO)
     async def character_intro_callback(callback: CallbackQuery) -> None:
@@ -271,18 +279,18 @@ def register_handlers(
         await _answer_callback(callback)
         await _edit_callback_message(callback, LEGEND_TEXT, back_to_menu_keyboard())
 
+    @router.callback_query(F.data == CallbackData.PLOT)
+    async def plot_callback(callback: CallbackQuery) -> None:
+        await _answer_callback(callback)
+        await _edit_callback_message(callback, PLOT_TEXT, back_to_menu_keyboard())
+
     @router.callback_query(F.data == CallbackData.ABOUT)
     async def about_callback(callback: CallbackQuery) -> None:
         await _answer_callback(callback)
-        await _edit_callback_message(callback, ABOUT_TEXT, back_to_menu_keyboard())
-
-    @router.callback_query(F.data == CallbackData.REPOSITORY)
-    async def repository_callback(callback: CallbackQuery) -> None:
-        await _answer_callback(callback)
         await _edit_callback_message(
             callback,
-            REPOSITORY_TEXT,
-            repository_keyboard(settings.repository_url),
+            ABOUT_TEXT.format(version=escape(__version__)),
+            back_to_menu_keyboard(),
         )
 
     @router.callback_query(F.data == CallbackData.MAP_VIEW)
@@ -372,7 +380,12 @@ def register_handlers(
             await _answer_callback(callback, "This support option is no longer valid.")
             return
         await _answer_callback(callback)
-        await _send_stars_invoice(cast(Message, callback.message), amount)
+        invoice_url = await _create_stars_invoice_link(callback.bot, amount)
+        await _edit_callback_message(
+            callback,
+            SUPPORT_STARS_TEXT.format(stars=amount),
+            support_invoice_keyboard(amount, invoice_url),
+        )
 
     @router.callback_query(F.data == CallbackData.BACK_TO_GAME)
     async def back_to_game_callback(callback: CallbackQuery) -> None:
@@ -514,8 +527,8 @@ def _support_amount_from_callback_data(data: str | None) -> int | None:
     return amount if amount in SUPPORT_STAR_AMOUNTS else None
 
 
-async def _send_stars_invoice(message: Message, amount: int) -> None:
-    await message.answer_invoice(
+async def _create_stars_invoice_link(bot: Bot, amount: int) -> str:
+    return await bot.create_invoice_link(
         title="Support TGLarn Development",
         description="Voluntary support for ongoing TGLarn development.",
         payload=support_invoice_payload(amount),

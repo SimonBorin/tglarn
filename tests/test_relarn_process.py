@@ -58,8 +58,8 @@ def test_main_menu_contains_expected_actions() -> None:
         "Rules",
         "Legend",
         "Display Size",
+        "Plot",
         "About",
-        "Repository",
     ]
 
 

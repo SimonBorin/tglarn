@@ -28,7 +28,12 @@ Telegram support cannot resolve purchases made through this bot."""
 SUPPORT_THANK_YOU_TEXT = """<b>Thank you!</b>
 Your support of {stars} Telegram Stars helps keep TGLarn development going."""
 
-ABOUT_TEXT = """<b>About</b>
+SUPPORT_STARS_TEXT = """<b>Support with Telegram Stars</b>
+You selected <b>⭐ {stars}</b>.
+
+Use the payment button below to continue, or go back to choose another option."""
+
+PLOT_TEXT = """<b>Plot</b>
 Your daughter is dying from a strange disease, and ordinary remedies have failed.
 
 Rumors point to the Caverns of Larn: a dangerous underground world once used by
@@ -37,6 +42,12 @@ spells, and the one thing that can save her.
 
 You are an explorer with little time, limited resources, and one job: survive the
 dungeon long enough to find a cure."""
+
+ABOUT_TEXT = """<b>About TGLarn</b>
+Version: {version}
+Author: Simon Borin (<a href="https://github.com/SimonBorin">@SimonBorin</a>)
+GitHub: <a href="https://github.com/SimonBorin/tglarn">github.com/SimonBorin/tglarn</a>
+Website: <a href="https://simonborin.github.io/tglarn/">simonborin.github.io/tglarn</a>"""
 
 INTRO_TEXT = """<b>Before the Caverns</b>
 Your child is dying from dianthroritis. The healers cannot stop it.
@@ -277,6 +288,3 @@ Choose a spell action."""
 
 GAME_MENU_TEXT = """<b>Game Menu</b>
 Choose an inventory, equipment, item, or travel action."""
-
-REPOSITORY_TEXT = """<b>Repository</b>
-Project source code will be available here:"""
