@@ -46,7 +46,8 @@ dungeon long enough to find a cure."""
 ABOUT_TEXT = """<b>About TGLarn</b>
 Version: {version}
 Author: Simon Borin (<a href="https://github.com/SimonBorin">@SimonBorin</a>)
-GitHub: <a href="https://github.com/SimonBorin/tglarn">github.com/SimonBorin/tglarn</a>"""
+GitHub: <a href="https://github.com/SimonBorin/tglarn">github.com/SimonBorin/tglarn</a>
+Website: <a href="https://simonborin.github.io/tglarn/">simonborin.github.io/tglarn</a>"""
 
 INTRO_TEXT = """<b>Before the Caverns</b>
 Your child is dying from dianthroritis. The healers cannot stop it.

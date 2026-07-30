@@ -72,3 +72,18 @@ No uncovered survivor was found in the bounded changed-code review.
   `test_stars_callback_reuses_current_message_with_invoice_link` passed for
   50, 100, and 250 Stars; it forbids `answer_invoice` and new text messages,
   requires an edited current message, and verifies the Back callback.
+
+## Beta feedback and canonical-link validation
+
+- Full suite: **198 passed**.
+- Focused suite:
+  `tests/test_project_feedback_links.py tests/test_menu_regressions.py` —
+  **10 passed**.
+- Ruff on both focused files and `git diff --check` — passed.
+- `test_readme_has_visible_beta_issue_report_block` requires a visible Beta
+  heading, invitation to report issues, and the canonical Issues URL.
+- `test_pages_has_visible_beta_notice_and_project_links` parses rendered text
+  and anchors, requiring the beta/issue notice plus canonical Issues and
+  repository links.
+- `test_bot_about_links_to_canonical_pages_site` and the existing About handler
+  regression require `https://simonborin.github.io/tglarn/`.

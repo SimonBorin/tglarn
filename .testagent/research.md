@@ -66,3 +66,16 @@ pairing run.
   Reusing the current support message therefore requires an invoice-link flow:
   create the link via the bot, then edit the existing support message with the
   payment action and a Back path.
+
+## Beta feedback and canonical-link extension
+
+- `README.md` is the repository landing document and must expose the beta state
+  and issue-report invitation outside an HTML comment.
+- `site/index.html` is the GitHub Pages entry point. A standard-library
+  `HTMLParser` can distinguish visible body copy from scripts/styles and collect
+  the actual anchor targets without adding a test dependency.
+- The canonical report target is
+  `https://github.com/SimonBorin/tglarn/issues`; the canonical repository target
+  is `https://github.com/SimonBorin/tglarn`.
+- `bot/tglarn_bot/texts.py` owns the About template. The canonical Pages URL is
+  `https://simonborin.github.io/tglarn/`.

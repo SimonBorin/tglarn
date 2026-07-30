@@ -56,3 +56,13 @@
    a Back path, and does not call `answer_invoice`, `answer`, or another
    new-message API.
 6. Run the focused regressions and record exact results below.
+
+## Beta feedback and canonical-link extension
+
+1. Parse README content and require a visible Beta heading, beta wording, an
+   issue-report invitation, and the canonical GitHub Issues link.
+2. Parse the Pages HTML as visible text and anchors; require beta/issue wording,
+   the canonical Issues link, and the canonical repository link.
+3. Format the bot About template and require the canonical Pages URL.
+4. Run the new static tests together with the existing About callback
+   regression, then run Ruff and `git diff --check`.

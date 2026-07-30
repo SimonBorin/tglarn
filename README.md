@@ -8,6 +8,13 @@ character progression, and win or loss conditions. TGLarn replaces the terminal
 interface with rendered maps, readable game messages, and contextual Telegram
 buttons.
 
+## Beta Status
+
+> [!IMPORTANT]
+> TGLarn is currently in beta. Bugs and rough edges are expected, and issue
+> reports are welcome. If you find a problem or have actionable feedback,
+> please [open a GitHub issue](https://github.com/SimonBorin/tglarn/issues).
+
 ## Play
 
 Open the live bot: [@tglarnbot](https://t.me/tglarnbot)

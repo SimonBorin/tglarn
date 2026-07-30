@@ -148,6 +148,7 @@ async def test_plot_and_about_callbacks_show_distinct_content() -> None:
     assert "Simon Borin" in about
     assert "https://github.com/SimonBorin" in about
     assert "https://github.com/SimonBorin/tglarn" in about
+    assert "https://simonborin.github.io/tglarn/" in about
     assert "ringcentral" not in about.lower()
     assert "simon-a-borin" not in about.lower()
     assert "daughter is dying" not in about
