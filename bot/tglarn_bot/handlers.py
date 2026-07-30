@@ -37,6 +37,7 @@ from .keyboards import (
     restart_confirmation_keyboard,
     rules_detail_keyboard,
     rules_menu_keyboard,
+    run_menu_keyboard,
     spell_menu_keyboard,
 )
 from .map_image import cleanup_rendered_game_image, render_game_image
@@ -263,6 +264,16 @@ def register_handlers(
             callback,
             GAME_MENU_TEXT,
             game_menu_keyboard(),
+        )
+        await _remember_callback_game_message(callback, session_service, edited_message)
+
+    @router.callback_query(F.data == CallbackData.RUN_MENU)
+    async def run_menu_callback(callback: CallbackQuery) -> None:
+        await _answer_callback(callback)
+        edited_message = await _edit_callback_message(
+            callback,
+            "Choose a direction. Running stops when ReLarn detects an obstacle or event.",
+            run_menu_keyboard(),
         )
         await _remember_callback_game_message(callback, session_service, edited_message)
 
