@@ -30,3 +30,13 @@
    - Run full pytest and Ruff once after all changes.
    - Review new assertions and record the final result in
      `.testagent/status.md`.
+
+## Development support extension
+
+1. Assert `⭐ Support Development ⭐` is strictly between `Legend` and
+   `Main Menu`.
+2. Assert the submenu exposes the exact Ko-fi URL and the 50/100/250 Telegram
+   Stars choices.
+3. Exercise invoice construction, pre-checkout validation, payment persistence,
+   thanks, `/paysupport`, and `/terms`.
+4. Run focused tests, the full suite, Ruff, and diff checks.

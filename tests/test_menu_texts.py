@@ -169,7 +169,12 @@ def test_game_menu_contains_inventory_and_item_actions() -> None:
     assert "Quaff Potion" in texts
     assert "Teleport" in texts
     assert "Legend" in texts
-    assert texts[-3:] == ["Legend", "Main Menu", "Back to Game"]
+    assert texts[-4:] == [
+        "Legend",
+        "⭐ Support Development ⭐",
+        "Main Menu",
+        "Back to Game",
+    ]
     assert f"{CallbackData.GAME_PREFIX}inventory" in callback_data
     assert f"{CallbackData.GAME_PREFIX}teleport" in callback_data
     assert CallbackData.GAME_LEGEND in callback_data

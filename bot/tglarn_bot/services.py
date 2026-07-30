@@ -23,6 +23,16 @@ _T = TypeVar("_T")
 
 
 class SessionStore(Protocol):
+    async def record_support_payment(
+        self,
+        telegram_user_id: int,
+        invoice_payload: str,
+        currency: str,
+        total_amount: int,
+        telegram_payment_charge_id: str,
+        provider_payment_charge_id: str,
+    ) -> None: ...
+
     async def ensure_session(
         self,
         telegram_user_id: int,
@@ -92,6 +102,24 @@ class GameSessionService:
         repr=False,
     )
     _clock: Callable[[], float] = field(default=time.monotonic, repr=False)
+
+    async def record_support_payment(
+        self,
+        telegram_user_id: int,
+        invoice_payload: str,
+        currency: str,
+        total_amount: int,
+        telegram_payment_charge_id: str,
+        provider_payment_charge_id: str,
+    ) -> None:
+        await self.store.record_support_payment(
+            telegram_user_id=telegram_user_id,
+            invoice_payload=invoice_payload,
+            currency=currency,
+            total_amount=total_amount,
+            telegram_payment_charge_id=telegram_payment_charge_id,
+            provider_payment_charge_id=provider_payment_charge_id,
+        )
 
     async def ensure_session(
         self,

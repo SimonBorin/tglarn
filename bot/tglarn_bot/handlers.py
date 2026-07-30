@@ -9,7 +9,15 @@ from typing import Any, cast
 from aiogram import Dispatcher, F, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.filters import Command, CommandStart
-from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message, User
+from aiogram.types import (
+    CallbackQuery,
+    FSInputFile,
+    InputMediaPhoto,
+    LabeledPrice,
+    Message,
+    PreCheckoutQuery,
+    User,
+)
 
 from .animations import (
     CREDITS_DELAY_SECONDS,
@@ -42,8 +50,14 @@ from .keyboards import (
     rules_menu_keyboard,
     run_menu_keyboard,
     spell_menu_keyboard,
+    support_keyboard,
 )
 from .map_image import cleanup_rendered_game_image, render_game_image
+from .payments import (
+    SUPPORT_STAR_AMOUNTS,
+    is_valid_support_checkout,
+    support_invoice_payload,
+)
 from .rendering import render_game_response
 from .services import GameSessionService
 from .texts import (
@@ -60,10 +74,14 @@ from .texts import (
     MAIN_MENU_TEXT,
     MAP_VIEW_TEXT,
     MAP_VIEW_UPDATED_TEXT,
+    PAY_SUPPORT_TEXT,
     REPOSITORY_TEXT,
     RESTART_CONFIRM_TEXT,
     RULES_MENU_TEXT,
     SPELL_MENU_TEXT,
+    SUPPORT_TERMS_TEXT,
+    SUPPORT_TEXT,
+    SUPPORT_THANK_YOU_TEXT,
 )
 
 _VALID_MAP_VIEWS = {"medium", "wide", "max"}
@@ -88,6 +106,47 @@ def register_handlers(
         _cancel_message_animation(message, animations)
         await _ensure_user_session(message, session_service)
         await message.answer(MAIN_MENU_TEXT, reply_markup=main_menu_keyboard())
+
+    @router.message(Command("paysupport"))
+    async def pay_support_command(message: Message) -> None:
+        await message.answer(PAY_SUPPORT_TEXT)
+
+    @router.message(Command("terms"))
+    async def terms_command(message: Message) -> None:
+        await message.answer(SUPPORT_TERMS_TEXT, reply_markup=support_keyboard())
+
+    @router.pre_checkout_query()
+    async def support_pre_checkout_query(pre_checkout_query: PreCheckoutQuery) -> None:
+        valid = is_valid_support_checkout(
+            pre_checkout_query.invoice_payload,
+            pre_checkout_query.currency,
+            pre_checkout_query.total_amount,
+        )
+        await pre_checkout_query.answer(
+            ok=valid,
+            error_message=None if valid else "This support invoice is no longer valid.",
+        )
+
+    @router.message(F.successful_payment)
+    async def successful_support_payment(message: Message) -> None:
+        payment = message.successful_payment
+        if message.from_user is None or payment is None:
+            return
+        if not is_valid_support_checkout(
+            payment.invoice_payload,
+            payment.currency,
+            payment.total_amount,
+        ):
+            return
+        await session_service.record_support_payment(
+            telegram_user_id=message.from_user.id,
+            invoice_payload=payment.invoice_payload,
+            currency=payment.currency,
+            total_amount=payment.total_amount,
+            telegram_payment_charge_id=payment.telegram_payment_charge_id,
+            provider_payment_charge_id=payment.provider_payment_charge_id,
+        )
+        await message.answer(SUPPORT_THANK_YOU_TEXT.format(stars=payment.total_amount))
 
     @router.message(F.text)
     async def text_game_command(message: Message) -> None:
@@ -286,6 +345,35 @@ def register_handlers(
         edited_message = await _edit_callback_message(callback, LEGEND_TEXT, game_legend_keyboard())
         await _remember_callback_game_message(callback, session_service, edited_message)
 
+    @router.callback_query(F.data == CallbackData.SUPPORT)
+    async def support_callback(callback: CallbackQuery) -> None:
+        await _answer_callback(callback)
+        edited_message = await _edit_callback_message(
+            callback,
+            SUPPORT_TEXT,
+            support_keyboard(),
+        )
+        await _remember_callback_game_message(callback, session_service, edited_message)
+
+    @router.callback_query(F.data == CallbackData.SUPPORT_TERMS)
+    async def support_terms_callback(callback: CallbackQuery) -> None:
+        await _answer_callback(callback)
+        edited_message = await _edit_callback_message(
+            callback,
+            SUPPORT_TERMS_TEXT,
+            support_keyboard(),
+        )
+        await _remember_callback_game_message(callback, session_service, edited_message)
+
+    @router.callback_query(F.data.startswith(CallbackData.SUPPORT_STARS_PREFIX))
+    async def support_stars_callback(callback: CallbackQuery) -> None:
+        amount = _support_amount_from_callback_data(callback.data)
+        if amount is None or callback.message is None:
+            await _answer_callback(callback, "This support option is no longer valid.")
+            return
+        await _answer_callback(callback)
+        await _send_stars_invoice(cast(Message, callback.message), amount)
+
     @router.callback_query(F.data == CallbackData.BACK_TO_GAME)
     async def back_to_game_callback(callback: CallbackQuery) -> None:
         await _answer_callback(callback)
@@ -414,6 +502,27 @@ def register_handlers(
         await _remember_callback_game_message(callback, session_service, edited_message)
 
     dispatcher.include_router(router)
+
+
+def _support_amount_from_callback_data(data: str | None) -> int | None:
+    if data is None or not data.startswith(CallbackData.SUPPORT_STARS_PREFIX):
+        return None
+    raw_amount = data.removeprefix(CallbackData.SUPPORT_STARS_PREFIX)
+    if not raw_amount.isdecimal():
+        return None
+    amount = int(raw_amount)
+    return amount if amount in SUPPORT_STAR_AMOUNTS else None
+
+
+async def _send_stars_invoice(message: Message, amount: int) -> None:
+    await message.answer_invoice(
+        title="Support TGLarn Development",
+        description="Voluntary support for ongoing TGLarn development.",
+        payload=support_invoice_payload(amount),
+        currency="XTR",
+        prices=[LabeledPrice(label="Support TGLarn", amount=amount)],
+        provider_token="",
+    )
 
 
 async def _ensure_user_session(message: Message, session_service: GameSessionService) -> None:
