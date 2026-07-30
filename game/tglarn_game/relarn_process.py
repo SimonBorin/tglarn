@@ -92,7 +92,7 @@ _NUMBER_PROMPT_RE = re.compile(
     r"(?:Deposit|Withdraw)\s+how\s+much\?"
     r"|How\s+much\s+(?:gold\s+do\s+you\s+drop|do\s+you\s+want\s+to\s+pay|do\s+you\s+donate)\?"
     r")"
-    r")\s*\[(?P<default>\d+)\]\s*$",
+    r")\s*\[(?P<default>\d+)\](?:\s*\(max\s+(?P<max>\d+)\))?\s*$",
     re.I,
 )
 _NUMBER_WORDS_UNDER_TWENTY = (
@@ -147,26 +147,17 @@ _INVENTORY_WEARABLE_WORDS = (
     "shield",
 )
 _INVENTORY_WIELDABLE_WORDS = (
-    "amulet",
     "axe",
     "belt",
-    "cube",
     "dagger",
-    "device",
     "flail",
     "hammer",
-    "hand of fear",
     "lance",
-    "orb",
     "ring",
-    "scarab",
     "slayer",
     "spear",
-    "staff",
     "sword",
-    "talisman",
     "vorpal",
-    "wand",
 )
 _DIRECTION_PROMPT_OPTIONS = (
     {"key": "y", "label": "NW"},
@@ -278,13 +269,21 @@ _COMMAND_KEYS = {
     "se": b"n",
     "wait": b".",
     ".": b".",
+    "run_north": b"K",
+    "run_south": b"J",
+    "run_east": b"L",
+    "run_west": b"H",
+    "run_northwest": b"Y",
+    "run_northeast": b"U",
+    "run_southwest": b"B",
+    "run_southeast": b"N",
     "look": b",",
     "l": b",",
     "inventory": b"i",
     "pack_weight": b"g",
     "wield": b"w",
     "wear": b"W",
-    "take_off": b"T",
+    "take_off": b"i",
     "drop": b"d",
     "read": b"r",
     "quaff": b"q",
@@ -292,9 +291,24 @@ _COMMAND_KEYS = {
     "teleport": b"Z",
     "spells": b"D",
     "cast": b"c",
-    "descend": b"g",
-    "go down": b"g",
-    ">": b"g",
+    "close_door": b"C",
+    "identify_traps": b"^",
+    "tax_status": b"P",
+    "help": b"?",
+    "version": b"v",
+    "scores": b"o",
+    "messages_back": b"\x10",
+    "messages_forward": b"\x0e",
+}
+
+_COMMAND_KEY_SEQUENCES = {
+    "wield": [b"w", b"?"],
+    "wear": [b"W", b"?"],
+    "drop": [b"d", b"?"],
+    "drop_gold": [b"d", b"."],
+    "read": [b"r", b"?"],
+    "quaff": [b"q", b"?"],
+    "eat": [b"e", b"?"],
 }
 
 
@@ -359,8 +373,8 @@ class RelarnProcessAdapter:
         if prompt_answer is not None and pending_prompt is not None:
             return self._answer_pending_prompt(state, pending_prompt, prompt_answer, map_view)
 
-        key = _command_to_key(command)
-        if key is None:
+        keys = _command_to_keys(command)
+        if keys is None:
             response = self.start(state, map_view=map_view)
             return GameResponse(
                 state=response.state,
@@ -372,7 +386,7 @@ class RelarnProcessAdapter:
                 status=response.status,
                 actions=response.actions,
             )
-        return self._run_cycle(state, [key], map_view, [])
+        return self._run_cycle(state, keys, map_view, [])
 
     def _select_inventory_item(
         self,
@@ -1309,13 +1323,28 @@ def _prompt_answer_keys(answer: str, pending_prompt: dict[str, Any]) -> list[byt
     if pending_prompt.get("kind") == _PROMPT_KIND_INVENTORY_ACTION:
         return _inventory_answer_keys(answer)
     if pending_prompt.get("kind") == _PROMPT_KIND_INDEXED_PICKLIST:
-        index = int(answer)
+        index = _indexed_picklist_row(answer, pending_prompt)
         return [b"j"] * index + [b"\n"]
 
     keys = [answer.encode("ascii")]
     if _prompt_requires_enter(pending_prompt):
         keys.append(b"\n")
     return keys
+
+
+def _indexed_picklist_row(answer: str, pending_prompt: dict[str, Any]) -> int:
+    options = pending_prompt.get("options", [])
+    if isinstance(options, list):
+        for option in options:
+            if not isinstance(option, dict) or str(option.get("key", "")) != answer:
+                continue
+            row_index = option.get("row_index")
+            if isinstance(row_index, int) and row_index >= 0:
+                return row_index
+            if isinstance(row_index, str) and row_index.isdecimal():
+                return int(row_index)
+            break
+    return int(answer)
 
 
 def _prompt_replays_trigger(pending_prompt: dict[str, Any], answer: str) -> bool:
@@ -1328,6 +1357,10 @@ def _inventory_answer_keys(answer: str) -> list[bytes]:
     action, separator, item_key = answer.partition(":")
     if not separator or len(item_key) != 1:
         return []
+    if action == "unwield":
+        return [b"w", b"-"]
+    if action == "take_off":
+        return [b"T", item_key.encode("ascii")]
     action_key = _INVENTORY_ACTION_KEYS.get(action)
     if action_key is None:
         return []
@@ -1363,7 +1396,7 @@ def _multi_picklist_clear_selection_keys(pending_prompt: dict[str, Any]) -> list
 
 def _number_answer_keys(answer: str, pending_prompt: dict[str, Any]) -> list[bytes]:
     if answer == "max":
-        value = str(pending_prompt.get("default", "0"))
+        value = str(pending_prompt.get("max", pending_prompt.get("default", "0")))
     else:
         value = answer
     return [value.encode("ascii"), b"\n"]
@@ -1420,6 +1453,15 @@ def _next_viewport_origin(
 def _command_to_key(command: str) -> bytes | None:
     normalized = command.strip().lower()
     return _COMMAND_KEYS.get(normalized)
+
+
+def _command_to_keys(command: str) -> list[bytes] | None:
+    normalized = command.strip().lower()
+    sequence = _COMMAND_KEY_SEQUENCES.get(normalized)
+    if sequence is not None:
+        return list(sequence)
+    key = _COMMAND_KEYS.get(normalized)
+    return [key] if key is not None else None
 
 
 def _render_display_lines(
@@ -1812,7 +1854,7 @@ def _detect_indexed_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
         if line.strip() and not _is_modal_ui_hint(line)
     ]
     if _is_indexed_store_screen(nonempty):
-        options = _indexed_store_options(nonempty)
+        options = _indexed_store_options(lines)
         if not options:
             return None
         return {
@@ -1830,7 +1872,8 @@ def _detect_indexed_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
 
 def _indexed_store_options(lines: list[str]) -> list[dict[str, str]]:
     options: list[dict[str, str]] = []
-    for line in lines:
+    first_row: int | None = None
+    for row_index, line in enumerate(lines):
         match = _STORE_PICKLIST_OPTION_RE.match(line)
         if match is None:
             continue
@@ -1839,10 +1882,13 @@ def _indexed_store_options(lines: list[str]) -> list[dict[str, str]]:
             continue
         price = match.group("bucks") or match.group("dollars")
         unit = "bucks" if match.group("bucks") is not None else "gold"
+        if first_row is None:
+            first_row = row_index
         options.append(
             {
                 "key": str(len(options)),
                 "label": f"{_button_label_words(label)} {_number_words(int(price))} {unit.title()}",
+                "row_index": str(row_index - first_row),
             }
         )
     return options
@@ -2003,13 +2049,14 @@ def _detect_number_prompt(text: str) -> dict[str, Any] | None:
     if match is None:
         return None
     default_value = int(match.group("default"))
+    max_value = int(match.group("max") or default_value)
     question = " ".join(match.group("question").split())
     return {
         "question": question,
         "kind": _PROMPT_KIND_NUMBER,
         "default": default_value,
-        "max": default_value,
-        "options": _number_prompt_options(default_value),
+        "max": max_value,
+        "options": _number_prompt_options(max_value),
     }
 
 
@@ -2087,6 +2134,16 @@ def _inventory_action_options(item: dict[str, str]) -> list[dict[str, str]]:
     key = item["key"]
     label = item["label"]
     lowered = label.lower()
+    if "(weapon in hand)" in lowered:
+        return [
+            _inventory_action_option("unwield", key),
+            _inventory_action_option("drop", key),
+        ]
+    if "(being worn)" in lowered:
+        return [
+            _inventory_action_option("take_off", key),
+            _inventory_action_option("drop", key),
+        ]
     wearable = _contains_any(lowered, _INVENTORY_WEARABLE_WORDS)
     if _contains_any(lowered, _INVENTORY_QUAFFABLE_WORDS):
         options.append(_inventory_action_option("quaff", key))
@@ -2096,7 +2153,7 @@ def _inventory_action_options(item: dict[str, str]) -> list[dict[str, str]]:
         options.append(_inventory_action_option("eat", key))
     if wearable:
         options.append(_inventory_action_option("wear", key))
-    elif _contains_any(lowered, _INVENTORY_WIELDABLE_WORDS):
+    if wearable or _contains_any(lowered, _INVENTORY_WIELDABLE_WORDS):
         options.append(_inventory_action_option("wield", key))
     options.append(_inventory_action_option("drop", key))
     return options
@@ -2119,6 +2176,8 @@ def _inventory_action_label(action: str) -> str:
         "eat": "Eat",
         "quaff": "Quaff",
         "read": "Read",
+        "take_off": "Take Off",
+        "unwield": "Unwield",
         "wear": "Wear",
         "wield": "Wield",
     }[action]
@@ -2210,14 +2269,15 @@ def _store_exit_option() -> dict[str, str]:
     return {"key": _PROMPT_EXIT_STORE_KEY, "label": "Exit Store"}
 
 
-def _number_prompt_options(default_value: int) -> list[dict[str, str]]:
-    return [
-        {"key": "0", "label": "Zero"},
-        {"key": "100", "label": "One Hundred"},
-        {"key": "500", "label": "Five Hundred"},
-        {"key": "1000", "label": "One Thousand"},
-        {"key": "max", "label": "Maximum"},
+def _number_prompt_options(max_value: int) -> list[dict[str, str]]:
+    values = (0, 100, 500, 1000)
+    options = [
+        {"key": str(value), "label": _number_words(value)}
+        for value in values
+        if value <= max_value
     ]
+    options.append({"key": "max", "label": "Maximum"})
+    return options
 
 
 def _has_echoed_prompt_answer(question: str, options: list[dict[str, str]]) -> bool:

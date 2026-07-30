@@ -121,6 +121,37 @@ wear () {
     say("You put on your %s.\n", longobjname(Invent[iz]));
 }/* wear */
 
+void
+takeoff () {
+    char candidates[3];
+    int count = 0;
+
+    if (UU.shield >= 0) {
+        candidates[count++] = (char)('a' + UU.shield);
+    }
+    if (UU.wear >= 0) {
+        candidates[count++] = (char)('a' + UU.wear);
+    }
+    candidates[count] = 0;
+
+    if (count == 0) {
+        say("You aren't wearing anything.\n");
+        return;
+    }
+
+    int selected = quickinv("take off", candidates, false, false);
+    if (selected == 0) return;
+
+    int index = selected - 'a';
+    if (index == UU.shield) {
+        UU.shield = -1;
+        say("Your shield is off.\n");
+    } else if (index == UU.wear) {
+        UU.wear = -1;
+        say("Your armor is off.\n");
+    }
+}/* takeoff */
+
 
 static void
 askanddropgold() {

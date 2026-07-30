@@ -8,6 +8,7 @@
 
 void wield(void);
 void wear(void);
+void takeoff(void);
 void dropobj(void);
 void readscr(void);
 void eatcookie(void);

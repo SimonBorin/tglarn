@@ -55,6 +55,8 @@ class CallbackData:
     GAME_LEGEND = "game_menu:legend"
     BACK_TO_GAME = "game_menu:back"
     SPELL_MENU = "spell:open"
+    RUN_MENU = "run:open"
+    NUMBER_PAD_PREFIX = "num:"
 
 
 def main_menu_keyboard() -> InlineKeyboardMarkup:
@@ -223,6 +225,10 @@ def game_keyboard(response: GameResponse) -> InlineKeyboardMarkup:
             ]
         )
 
+    pending_prompt = response.status.get("pending_prompt")
+    if isinstance(pending_prompt, dict) and pending_prompt.get("kind") == "number_prompt":
+        return number_pad_keyboard()
+
     context_actions = [action for action in response.actions if action.group == "context"]
     if not context_actions:
         context_actions = _pending_prompt_actions(response.status.get("pending_prompt"))
@@ -247,6 +253,7 @@ def game_keyboard(response: GameResponse) -> InlineKeyboardMarkup:
         ],
     ]
     inline_keyboard.extend(_context_action_rows(context_actions))
+    inline_keyboard.append([_game_button("Wait", "wait")])
     inline_keyboard.append(
         [
             InlineKeyboardButton(text="Spell", callback_data=CallbackData.SPELL_MENU),
@@ -275,7 +282,7 @@ def _context_action_rows(actions) -> list[list[InlineKeyboardButton]]:
         [
             InlineKeyboardButton(
                 text=_button_text(action.label),
-                callback_data=f"{CallbackData.GAME_PREFIX}{action.command}",
+                callback_data=_game_callback(action.command),
             )
         ]
         for action in actions
@@ -365,18 +372,43 @@ def game_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="Inventory", callback_data=_game_callback("inventory"))],
             [InlineKeyboardButton(text="Pack Weight", callback_data=_game_callback("pack_weight"))],
+            [InlineKeyboardButton(text="Run", callback_data=CallbackData.RUN_MENU)],
             [
                 InlineKeyboardButton(text="Wield Weapon", callback_data=_game_callback("wield")),
                 InlineKeyboardButton(text="Wear Armor", callback_data=_game_callback("wear")),
             ],
             [InlineKeyboardButton(text="Take Off", callback_data=_game_callback("take_off"))],
             [InlineKeyboardButton(text="Drop Item", callback_data=_game_callback("drop"))],
+            [InlineKeyboardButton(text="Drop Gold", callback_data=_game_callback("drop_gold"))],
             [
                 InlineKeyboardButton(text="Read Scroll", callback_data=_game_callback("read")),
                 InlineKeyboardButton(text="Quaff Potion", callback_data=_game_callback("quaff")),
             ],
             [InlineKeyboardButton(text="Eat", callback_data=_game_callback("eat"))],
             [InlineKeyboardButton(text="Teleport", callback_data=_game_callback("teleport"))],
+            [
+                InlineKeyboardButton(text="Close Door", callback_data=_game_callback("close_door")),
+                InlineKeyboardButton(
+                    text="Identify Traps",
+                    callback_data=_game_callback("identify_traps"),
+                ),
+            ],
+            [InlineKeyboardButton(text="Tax Status", callback_data=_game_callback("tax_status"))],
+            [InlineKeyboardButton(text="Scores", callback_data=_game_callback("scores"))],
+            [
+                InlineKeyboardButton(
+                    text="Earlier Messages",
+                    callback_data=_game_callback("messages_back"),
+                ),
+                InlineKeyboardButton(
+                    text="Later Messages",
+                    callback_data=_game_callback("messages_forward"),
+                ),
+            ],
+            [
+                InlineKeyboardButton(text="Native Help", callback_data=_game_callback("help")),
+                InlineKeyboardButton(text="Version", callback_data=_game_callback("version")),
+            ],
             [InlineKeyboardButton(text="Legend", callback_data=CallbackData.GAME_LEGEND)],
             [InlineKeyboardButton(text="Main Menu", callback_data=CallbackData.MAIN_MENU)],
             [InlineKeyboardButton(text="Back to Game", callback_data=CallbackData.BACK_TO_GAME)],
@@ -389,4 +421,105 @@ def _game_button(label: str, command: str) -> InlineKeyboardButton:
 
 
 def _game_callback(command: str) -> str:
-    return f"{CallbackData.GAME_PREFIX}{command}"
+    callback_data = f"{CallbackData.GAME_PREFIX}{command}"
+    if len(callback_data.encode("utf-8")) > 64:
+        raise ValueError("Telegram callback_data must not exceed 64 bytes")
+    return callback_data
+
+
+def number_pad_keyboard(draft: str = "") -> InlineKeyboardMarkup:
+    normalized = draft[:18] if draft.isdecimal() else ""
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"Amount: {normalized or '0'}",
+                callback_data=_number_pad_callback(normalized, "noop"),
+            )
+        ]
+    ]
+    for start in (1, 4, 7):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=str(digit),
+                    callback_data=_number_pad_callback(normalized, str(digit)),
+                )
+                for digit in range(start, start + 3)
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="Backspace",
+                callback_data=_number_pad_callback(normalized, "back"),
+            ),
+            InlineKeyboardButton(text="0", callback_data=_number_pad_callback(normalized, "0")),
+            InlineKeyboardButton(
+                text="Submit",
+                callback_data=_number_pad_callback(normalized, "submit"),
+            ),
+        ]
+    )
+    rows.extend(
+        [
+            [_game_button("Maximum", "number:max")],
+            [_game_button("Cancel", "prompt:cancel")],
+            [_game_button("Main Menu", "prompt:menu")],
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def parse_number_pad_callback(callback_data: str | None) -> tuple[str, str] | None:
+    if callback_data is None or not callback_data.startswith(CallbackData.NUMBER_PAD_PREFIX):
+        return None
+    payload = callback_data.removeprefix(CallbackData.NUMBER_PAD_PREFIX)
+    encoded_draft, separator, operation = payload.partition(":")
+    if not separator:
+        return None
+    draft = "" if encoded_draft == "_" else encoded_draft
+    if draft and (not draft.isdecimal() or len(draft) > 18):
+        return None
+    if operation not in {*"0123456789", "back", "noop", "submit"}:
+        return None
+    return draft, operation
+
+
+def apply_number_pad_operation(draft: str, operation: str) -> tuple[str, str | None]:
+    if operation == "submit":
+        return draft, f"number:{draft}" if draft else "number:max"
+    if operation == "back":
+        return draft[:-1], None
+    if operation.isdecimal() and len(draft) < 18:
+        return f"{draft}{operation}".lstrip("0") or "0", None
+    return draft, None
+
+
+def _number_pad_callback(draft: str, operation: str) -> str:
+    encoded_draft = draft or "_"
+    callback_data = f"{CallbackData.NUMBER_PAD_PREFIX}{encoded_draft}:{operation}"
+    if len(callback_data.encode("utf-8")) > 64:
+        raise ValueError("Telegram callback_data must not exceed 64 bytes")
+    return callback_data
+
+
+def run_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                _game_button("Run NW", "run_northwest"),
+                _game_button("Run N", "run_north"),
+                _game_button("Run NE", "run_northeast"),
+            ],
+            [
+                _game_button("Run W", "run_west"),
+                _game_button("Run E", "run_east"),
+            ],
+            [
+                _game_button("Run SW", "run_southwest"),
+                _game_button("Run S", "run_south"),
+                _game_button("Run SE", "run_southeast"),
+            ],
+            [InlineKeyboardButton(text="Back", callback_data=CallbackData.GAME_MENU)],
+        ]
+    )
