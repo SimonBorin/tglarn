@@ -56,6 +56,7 @@ class CallbackData:
     BACK_TO_GAME = "game_menu:back"
     SPELL_MENU = "spell:open"
     RUN_MENU = "run:open"
+    NUMBER_PAD_PREFIX = "num:"
 
 
 def main_menu_keyboard() -> InlineKeyboardMarkup:
@@ -223,6 +224,10 @@ def game_keyboard(response: GameResponse) -> InlineKeyboardMarkup:
                 ],
             ]
         )
+
+    pending_prompt = response.status.get("pending_prompt")
+    if isinstance(pending_prompt, dict) and pending_prompt.get("kind") == "number_prompt":
+        return number_pad_keyboard()
 
     context_actions = [action for action in response.actions if action.group == "context"]
     if not context_actions:
@@ -406,6 +411,82 @@ def _game_button(label: str, command: str) -> InlineKeyboardButton:
 
 def _game_callback(command: str) -> str:
     callback_data = f"{CallbackData.GAME_PREFIX}{command}"
+    if len(callback_data.encode("utf-8")) > 64:
+        raise ValueError("Telegram callback_data must not exceed 64 bytes")
+    return callback_data
+
+
+def number_pad_keyboard(draft: str = "") -> InlineKeyboardMarkup:
+    normalized = draft[:18] if draft.isdecimal() else ""
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"Amount: {normalized or '0'}",
+                callback_data=_number_pad_callback(normalized, "noop"),
+            )
+        ]
+    ]
+    for start in (1, 4, 7):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=str(digit),
+                    callback_data=_number_pad_callback(normalized, str(digit)),
+                )
+                for digit in range(start, start + 3)
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="Backspace",
+                callback_data=_number_pad_callback(normalized, "back"),
+            ),
+            InlineKeyboardButton(text="0", callback_data=_number_pad_callback(normalized, "0")),
+            InlineKeyboardButton(
+                text="Submit",
+                callback_data=_number_pad_callback(normalized, "submit"),
+            ),
+        ]
+    )
+    rows.extend(
+        [
+            [_game_button("Maximum", "number:max")],
+            [_game_button("Cancel", "prompt:cancel")],
+            [_game_button("Main Menu", "prompt:menu")],
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def parse_number_pad_callback(callback_data: str | None) -> tuple[str, str] | None:
+    if callback_data is None or not callback_data.startswith(CallbackData.NUMBER_PAD_PREFIX):
+        return None
+    payload = callback_data.removeprefix(CallbackData.NUMBER_PAD_PREFIX)
+    encoded_draft, separator, operation = payload.partition(":")
+    if not separator:
+        return None
+    draft = "" if encoded_draft == "_" else encoded_draft
+    if draft and (not draft.isdecimal() or len(draft) > 18):
+        return None
+    if operation not in {*"0123456789", "back", "noop", "submit"}:
+        return None
+    return draft, operation
+
+
+def apply_number_pad_operation(draft: str, operation: str) -> tuple[str, str | None]:
+    if operation == "submit":
+        return draft, f"number:{draft}" if draft else "number:max"
+    if operation == "back":
+        return draft[:-1], None
+    if operation.isdecimal() and len(draft) < 18:
+        return f"{draft}{operation}".lstrip("0") or "0", None
+    return draft, None
+
+
+def _number_pad_callback(draft: str, operation: str) -> str:
+    encoded_draft = draft or "_"
+    callback_data = f"{CallbackData.NUMBER_PAD_PREFIX}{encoded_draft}:{operation}"
     if len(callback_data.encode("utf-8")) > 64:
         raise ValueError("Telegram callback_data must not exceed 64 bytes")
     return callback_data

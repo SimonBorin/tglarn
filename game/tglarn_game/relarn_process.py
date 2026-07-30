@@ -92,7 +92,7 @@ _NUMBER_PROMPT_RE = re.compile(
     r"(?:Deposit|Withdraw)\s+how\s+much\?"
     r"|How\s+much\s+(?:gold\s+do\s+you\s+drop|do\s+you\s+want\s+to\s+pay|do\s+you\s+donate)\?"
     r")"
-    r")\s*\[(?P<default>\d+)\]\s*$",
+    r")\s*\[(?P<default>\d+)\](?:\s*\(max\s+(?P<max>\d+)\))?\s*$",
     re.I,
 )
 _NUMBER_WORDS_UNDER_TWENTY = (
@@ -1393,7 +1393,7 @@ def _multi_picklist_clear_selection_keys(pending_prompt: dict[str, Any]) -> list
 
 def _number_answer_keys(answer: str, pending_prompt: dict[str, Any]) -> list[bytes]:
     if answer == "max":
-        value = str(pending_prompt.get("default", "0"))
+        value = str(pending_prompt.get("max", pending_prompt.get("default", "0")))
     else:
         value = answer
     return [value.encode("ascii"), b"\n"]
@@ -2046,13 +2046,14 @@ def _detect_number_prompt(text: str) -> dict[str, Any] | None:
     if match is None:
         return None
     default_value = int(match.group("default"))
+    max_value = int(match.group("max") or default_value)
     question = " ".join(match.group("question").split())
     return {
         "question": question,
         "kind": _PROMPT_KIND_NUMBER,
         "default": default_value,
-        "max": default_value,
-        "options": _number_prompt_options(default_value),
+        "max": max_value,
+        "options": _number_prompt_options(max_value),
     }
 
 
@@ -2265,14 +2266,15 @@ def _store_exit_option() -> dict[str, str]:
     return {"key": _PROMPT_EXIT_STORE_KEY, "label": "Exit Store"}
 
 
-def _number_prompt_options(default_value: int) -> list[dict[str, str]]:
-    return [
-        {"key": "0", "label": "Zero"},
-        {"key": "100", "label": "One Hundred"},
-        {"key": "500", "label": "Five Hundred"},
-        {"key": "1000", "label": "One Thousand"},
-        {"key": "max", "label": "Maximum"},
+def _number_prompt_options(max_value: int) -> list[dict[str, str]]:
+    values = (0, 100, 500, 1000)
+    options = [
+        {"key": str(value), "label": _number_words(value)}
+        for value in values
+        if value <= max_value
     ]
+    options.append({"key": "max", "label": "Maximum"})
+    return options
 
 
 def _has_echoed_prompt_answer(question: str, options: list[dict[str, str]]) -> bool:

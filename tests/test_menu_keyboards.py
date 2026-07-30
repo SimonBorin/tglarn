@@ -2,6 +2,7 @@ import pytest
 from tglarn_bot.keyboards import (
     CallbackData,
     _game_callback,
+    apply_number_pad_operation,
     character_class_guide_keyboard,
     character_class_keyboard,
     character_gender_keyboard,
@@ -11,6 +12,8 @@ from tglarn_bot.keyboards import (
     intro_keyboard,
     main_menu_keyboard,
     map_view_keyboard,
+    number_pad_keyboard,
+    parse_number_pad_callback,
     restart_confirmation_keyboard,
     rules_menu_keyboard,
     run_menu_keyboard,
@@ -335,14 +338,31 @@ def test_game_keyboard_renders_status_only_number_prompt_actions() -> None:
     texts = _button_texts(game_keyboard(response))
     callback_data = _button_callback_data(game_keyboard(response))
 
-    assert "Zero" in texts
-    assert "One Hundred" in texts
+    assert "Amount: 0" in texts
+    assert "1" in texts
+    assert "Backspace" in texts
+    assert "Submit" in texts
     assert "Maximum" in texts
     assert "Cancel" in texts
     assert "Main Menu" in texts
     assert f"{CallbackData.GAME_PREFIX}number:max" in callback_data
     assert f"{CallbackData.GAME_PREFIX}prompt:cancel" in callback_data
     assert f"{CallbackData.GAME_PREFIX}prompt:menu" in callback_data
+
+
+def test_number_pad_builds_and_parses_inline_drafts() -> None:
+    callback_data = _button_callback_data(number_pad_keyboard("42"))
+
+    assert "num:42:7" in callback_data
+    assert "num:42:back" in callback_data
+    assert "num:42:submit" in callback_data
+    assert parse_number_pad_callback("num:42:7") == ("42", "7")
+    assert parse_number_pad_callback("num:_:0") == ("", "0")
+    assert parse_number_pad_callback("num:1234567890123456789:submit") is None
+    assert apply_number_pad_operation("42", "7") == ("427", None)
+    assert apply_number_pad_operation("42", "back") == ("4", None)
+    assert apply_number_pad_operation("42", "submit") == ("42", "number:42")
+    assert apply_number_pad_operation("", "submit") == ("", "number:max")
 
 
 def test_game_keyboard_for_modal_prompt_omits_movement_controls() -> None:

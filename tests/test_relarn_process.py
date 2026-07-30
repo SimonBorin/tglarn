@@ -1005,10 +1005,20 @@ def test_detect_prompt_extracts_number_prompt_options() -> None:
             {"key": "0", "label": "Zero"},
             {"key": "100", "label": "One Hundred"},
             {"key": "500", "label": "Five Hundred"},
-            {"key": "1000", "label": "One Thousand"},
             {"key": "max", "label": "Maximum"},
         ],
     }
+
+
+def test_detect_number_prompt_uses_native_maximum() -> None:
+    prompt = _detect_prompt(
+        [""] * 19 + ["How much do you donate? [0] (max 1234)"]
+    )
+
+    assert prompt is not None
+    assert prompt["default"] == 0
+    assert prompt["max"] == 1234
+    assert _prompt_answer_keys("max", prompt) == [b"1234", b"\n"]
 
 
 def test_number_prompt_accepts_button_and_text_answers() -> None:
