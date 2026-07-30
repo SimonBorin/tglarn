@@ -278,6 +278,14 @@ _COMMAND_KEYS = {
     "se": b"n",
     "wait": b".",
     ".": b".",
+    "run_north": b"K",
+    "run_south": b"J",
+    "run_east": b"L",
+    "run_west": b"H",
+    "run_northwest": b"Y",
+    "run_northeast": b"U",
+    "run_southwest": b"B",
+    "run_southeast": b"N",
     "look": b",",
     "l": b",",
     "inventory": b"i",
@@ -292,9 +300,21 @@ _COMMAND_KEYS = {
     "teleport": b"Z",
     "spells": b"D",
     "cast": b"c",
-    "descend": b"g",
-    "go down": b"g",
-    ">": b"g",
+    "close_door": b"C",
+    "identify_traps": b"^",
+    "tax_status": b"P",
+    "help": b"?",
+    "version": b"v",
+    "scores": b"o",
+}
+
+_COMMAND_KEY_SEQUENCES = {
+    "wield": [b"w", b"?"],
+    "wear": [b"W", b"?"],
+    "drop": [b"d", b"?"],
+    "read": [b"r", b"?"],
+    "quaff": [b"q", b"?"],
+    "eat": [b"e", b"?"],
 }
 
 
@@ -359,8 +379,8 @@ class RelarnProcessAdapter:
         if prompt_answer is not None and pending_prompt is not None:
             return self._answer_pending_prompt(state, pending_prompt, prompt_answer, map_view)
 
-        key = _command_to_key(command)
-        if key is None:
+        keys = _command_to_keys(command)
+        if keys is None:
             response = self.start(state, map_view=map_view)
             return GameResponse(
                 state=response.state,
@@ -372,7 +392,7 @@ class RelarnProcessAdapter:
                 status=response.status,
                 actions=response.actions,
             )
-        return self._run_cycle(state, [key], map_view, [])
+        return self._run_cycle(state, keys, map_view, [])
 
     def _select_inventory_item(
         self,
@@ -1309,13 +1329,28 @@ def _prompt_answer_keys(answer: str, pending_prompt: dict[str, Any]) -> list[byt
     if pending_prompt.get("kind") == _PROMPT_KIND_INVENTORY_ACTION:
         return _inventory_answer_keys(answer)
     if pending_prompt.get("kind") == _PROMPT_KIND_INDEXED_PICKLIST:
-        index = int(answer)
+        index = _indexed_picklist_row(answer, pending_prompt)
         return [b"j"] * index + [b"\n"]
 
     keys = [answer.encode("ascii")]
     if _prompt_requires_enter(pending_prompt):
         keys.append(b"\n")
     return keys
+
+
+def _indexed_picklist_row(answer: str, pending_prompt: dict[str, Any]) -> int:
+    options = pending_prompt.get("options", [])
+    if isinstance(options, list):
+        for option in options:
+            if not isinstance(option, dict) or str(option.get("key", "")) != answer:
+                continue
+            row_index = option.get("row_index")
+            if isinstance(row_index, int) and row_index >= 0:
+                return row_index
+            if isinstance(row_index, str) and row_index.isdecimal():
+                return int(row_index)
+            break
+    return int(answer)
 
 
 def _prompt_replays_trigger(pending_prompt: dict[str, Any], answer: str) -> bool:
@@ -1420,6 +1455,15 @@ def _next_viewport_origin(
 def _command_to_key(command: str) -> bytes | None:
     normalized = command.strip().lower()
     return _COMMAND_KEYS.get(normalized)
+
+
+def _command_to_keys(command: str) -> list[bytes] | None:
+    normalized = command.strip().lower()
+    sequence = _COMMAND_KEY_SEQUENCES.get(normalized)
+    if sequence is not None:
+        return list(sequence)
+    key = _COMMAND_KEYS.get(normalized)
+    return [key] if key is not None else None
 
 
 def _render_display_lines(
@@ -1812,7 +1856,7 @@ def _detect_indexed_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
         if line.strip() and not _is_modal_ui_hint(line)
     ]
     if _is_indexed_store_screen(nonempty):
-        options = _indexed_store_options(nonempty)
+        options = _indexed_store_options(lines)
         if not options:
             return None
         return {
@@ -1830,7 +1874,8 @@ def _detect_indexed_picklist_prompt(lines: list[str]) -> dict[str, Any] | None:
 
 def _indexed_store_options(lines: list[str]) -> list[dict[str, str]]:
     options: list[dict[str, str]] = []
-    for line in lines:
+    first_row: int | None = None
+    for row_index, line in enumerate(lines):
         match = _STORE_PICKLIST_OPTION_RE.match(line)
         if match is None:
             continue
@@ -1839,10 +1884,13 @@ def _indexed_store_options(lines: list[str]) -> list[dict[str, str]]:
             continue
         price = match.group("bucks") or match.group("dollars")
         unit = "bucks" if match.group("bucks") is not None else "gold"
+        if first_row is None:
+            first_row = row_index
         options.append(
             {
                 "key": str(len(options)),
                 "label": f"{_button_label_words(label)} {_number_words(int(price))} {unit.title()}",
+                "row_index": str(row_index - first_row),
             }
         )
     return options

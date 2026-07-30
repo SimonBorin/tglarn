@@ -17,6 +17,7 @@ from tglarn_bot.keyboards import (
 )
 from tglarn_game import GameResponse, PlaceholderGameAdapter
 from tglarn_game.relarn_process import (
+    _command_to_keys,
     _detect_prompt,
     _game_over_log_lines,
     _inventory_item_from_command,
@@ -57,6 +58,28 @@ def test_main_menu_contains_expected_actions() -> None:
         "About",
         "Repository",
     ]
+
+
+def test_item_commands_open_native_fullscreen_pickers() -> None:
+    assert _command_to_keys("wield") == [b"w", b"?"]
+    assert _command_to_keys("wear") == [b"W", b"?"]
+    assert _command_to_keys("drop") == [b"d", b"?"]
+    assert _command_to_keys("read") == [b"r", b"?"]
+    assert _command_to_keys("quaff") == [b"q", b"?"]
+    assert _command_to_keys("eat") == [b"e", b"?"]
+
+
+def test_extended_commands_map_to_native_relarn_keys() -> None:
+    assert _command_to_keys("wait") == [b"."]
+    assert _command_to_keys("run_northwest") == [b"Y"]
+    assert _command_to_keys("run_southeast") == [b"N"]
+    assert _command_to_keys("close_door") == [b"C"]
+    assert _command_to_keys("identify_traps") == [b"^"]
+    assert _command_to_keys("tax_status") == [b"P"]
+    assert _command_to_keys("help") == [b"?"]
+    assert _command_to_keys("version") == [b"v"]
+    assert _command_to_keys("scores") == [b"o"]
+    assert _command_to_keys("descend") is None
 
 
 def test_intro_keyboard_starts_character_creation() -> None:
@@ -531,9 +554,17 @@ def test_detect_prompt_extracts_dealer_picklist_options() -> None:
         "question": "Choose an item.",
         "kind": "indexed_picklist",
         "options": [
-            {"key": "0", "label": "Killer Speed One Hundred Bucks"},
-            {"key": "1", "label": "Groovy Acid Two Hundred Fifty Bucks"},
-            {"key": "2", "label": "Monster Hash Five Hundred Bucks"},
+            {"key": "0", "label": "Killer Speed One Hundred Bucks", "row_index": "0"},
+            {
+                "key": "1",
+                "label": "Groovy Acid Two Hundred Fifty Bucks",
+                "row_index": "1",
+            },
+            {
+                "key": "2",
+                "label": "Monster Hash Five Hundred Bucks",
+                "row_index": "2",
+            },
             {"key": "exit_store", "label": "Exit Store"},
         ],
         "store": True,
@@ -560,9 +591,9 @@ def test_detect_prompt_extracts_dnd_store_picklist_options() -> None:
         "question": "Choose an item.",
         "kind": "indexed_picklist",
         "options": [
-            {"key": "0", "label": "a spear Thirty Gold"},
-            {"key": "1", "label": "leather armor Fifty Gold"},
-            {"key": "2", "label": "a magic potion Ninety Gold"},
+            {"key": "0", "label": "a spear Thirty Gold", "row_index": "0"},
+            {"key": "1", "label": "leather armor Fifty Gold", "row_index": "1"},
+            {"key": "2", "label": "a magic potion Ninety Gold", "row_index": "2"},
             {"key": "exit_store", "label": "Exit Store"},
         ],
         "store": True,
@@ -713,6 +744,23 @@ def test_indexed_picklist_prompt_answers_move_to_selected_row() -> None:
 
     assert answer == "2"
     assert _prompt_answer_keys(answer, prompt) == [b"j", b"j", b"\n"]
+
+
+def test_indexed_store_selection_preserves_blank_category_rows() -> None:
+    prompt = _detect_prompt(
+        [
+            "Welcome to the Larn Thrift Shoppe.",
+            "Your gold: $144",
+            "     a spear                                  $30",
+            "",
+            "     leather armor                            $50",
+            "Up:k/CTRL+p/UP Down:j/CTRL+n/DOWN Select:ENTER Quit:ESC/CTRL+x",
+        ]
+    )
+
+    assert prompt is not None
+    assert prompt["options"][1]["row_index"] == "2"
+    assert _prompt_answer_keys("1", prompt) == [b"j", b"j", b"\n"]
 
 
 def test_indexed_store_exit_sends_escape() -> None:
