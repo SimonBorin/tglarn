@@ -147,26 +147,17 @@ _INVENTORY_WEARABLE_WORDS = (
     "shield",
 )
 _INVENTORY_WIELDABLE_WORDS = (
-    "amulet",
     "axe",
     "belt",
-    "cube",
     "dagger",
-    "device",
     "flail",
     "hammer",
-    "hand of fear",
     "lance",
-    "orb",
     "ring",
-    "scarab",
     "slayer",
     "spear",
-    "staff",
     "sword",
-    "talisman",
     "vorpal",
-    "wand",
 )
 _DIRECTION_PROMPT_OPTIONS = (
     {"key": "y", "label": "NW"},
@@ -292,7 +283,7 @@ _COMMAND_KEYS = {
     "pack_weight": b"g",
     "wield": b"w",
     "wear": b"W",
-    "take_off": b"T",
+    "take_off": b"i",
     "drop": b"d",
     "read": b"r",
     "quaff": b"q",
@@ -1363,6 +1354,10 @@ def _inventory_answer_keys(answer: str) -> list[bytes]:
     action, separator, item_key = answer.partition(":")
     if not separator or len(item_key) != 1:
         return []
+    if action == "unwield":
+        return [b"w", b"-"]
+    if action == "take_off":
+        return [b"T", item_key.encode("ascii")]
     action_key = _INVENTORY_ACTION_KEYS.get(action)
     if action_key is None:
         return []
@@ -2135,6 +2130,16 @@ def _inventory_action_options(item: dict[str, str]) -> list[dict[str, str]]:
     key = item["key"]
     label = item["label"]
     lowered = label.lower()
+    if "(weapon in hand)" in lowered:
+        return [
+            _inventory_action_option("unwield", key),
+            _inventory_action_option("drop", key),
+        ]
+    if "(being worn)" in lowered:
+        return [
+            _inventory_action_option("take_off", key),
+            _inventory_action_option("drop", key),
+        ]
     wearable = _contains_any(lowered, _INVENTORY_WEARABLE_WORDS)
     if _contains_any(lowered, _INVENTORY_QUAFFABLE_WORDS):
         options.append(_inventory_action_option("quaff", key))
@@ -2144,7 +2149,7 @@ def _inventory_action_options(item: dict[str, str]) -> list[dict[str, str]]:
         options.append(_inventory_action_option("eat", key))
     if wearable:
         options.append(_inventory_action_option("wear", key))
-    elif _contains_any(lowered, _INVENTORY_WIELDABLE_WORDS):
+    if wearable or _contains_any(lowered, _INVENTORY_WIELDABLE_WORDS):
         options.append(_inventory_action_option("wield", key))
     options.append(_inventory_action_option("drop", key))
     return options
@@ -2167,6 +2172,8 @@ def _inventory_action_label(action: str) -> str:
         "eat": "Eat",
         "quaff": "Quaff",
         "read": "Read",
+        "take_off": "Take Off",
+        "unwield": "Unwield",
         "wear": "Wear",
         "wield": "Wield",
     }[action]
