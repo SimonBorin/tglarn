@@ -41,3 +41,12 @@ sandbox. The escalation request was aborted, so the analyzer could not produce
 a reliable pairing report. Existing source-to-test locations above are based
 on the repository's established test layout, not on a successful static
 pairing run.
+
+## Development support extension
+
+- `keyboards.py` owns game-menu placement and the support submenu.
+- `payments.py` owns Star amounts, payloads, and checkout validation.
+- `handlers.py` owns invoices, checkout, payment confirmation, `/paysupport`,
+  and `/terms`.
+- `tests/test_support.py` uses an in-memory dispatcher and mocks, with no
+  network or database access.
