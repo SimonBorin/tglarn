@@ -23,6 +23,7 @@ from .keyboards import (
     CHARACTER_CLASS_BY_ID,
     CHARACTER_GENDER_BY_ID,
     CallbackData,
+    apply_number_pad_operation,
     back_to_menu_keyboard,
     character_class_guide_keyboard,
     character_class_keyboard,
@@ -33,6 +34,8 @@ from .keyboards import (
     intro_keyboard,
     main_menu_keyboard,
     map_view_keyboard,
+    number_pad_keyboard,
+    parse_number_pad_callback,
     repository_keyboard,
     restart_confirmation_keyboard,
     rules_detail_keyboard,
@@ -332,6 +335,42 @@ def register_handlers(
             )
             return
         await _edit_callback_message(callback, INTRO_TEXT, intro_keyboard())
+
+    @router.callback_query(F.data.startswith(CallbackData.NUMBER_PAD_PREFIX))
+    async def number_pad_callback(callback: CallbackQuery) -> None:
+        telegram_user_id = _telegram_user_id(callback)
+        parsed = parse_number_pad_callback(callback.data)
+        if telegram_user_id is None or parsed is None or callback.message is None:
+            return
+        chat_id = callback.message.chat.id
+        message_id = callback.message.message_id
+        if not await session_service.active_game_message_matches(
+            telegram_user_id,
+            chat_id,
+            message_id,
+        ):
+            await _answer_callback(
+                callback,
+                "This game screen is out of date. Use the latest game screen.",
+            )
+            return
+
+        draft, operation = parsed
+        draft, command = apply_number_pad_operation(draft, operation)
+        if command is not None:
+            await _answer_callback(callback)
+            response = await session_service.apply_command(telegram_user_id, command)
+            edited_message = await _edit_callback_game_response(
+                callback,
+                response,
+                game_keyboard(response),
+            )
+            await _remember_callback_game_message(callback, session_service, edited_message)
+            return
+
+        await _answer_callback(callback)
+        if operation != "noop":
+            await callback.message.edit_reply_markup(reply_markup=number_pad_keyboard(draft))
 
     @router.callback_query(F.data.startswith(CallbackData.GAME_PREFIX))
     async def game_action_callback(callback: CallbackQuery) -> None:

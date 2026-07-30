@@ -1360,7 +1360,11 @@ numPromptAll(const char *question, long defaultValue, long min, long max,
         long result;
         char *endptr;
 
-        say("%s [%d] ", question, defaultValue);
+        if (min != max && max >= min) {
+            say("%s [%d] (max %d) ", question, defaultValue, max);
+        } else {
+            say("%s [%d] ", question, defaultValue);
+        }
         if (!stringPrompt("", buffer, sizeof(buffer))) {
             *success = false;
             return -1;
