@@ -973,6 +973,83 @@ section[id] {
   color: var(--blue);
 }
 
+.support-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 0.72fr);
+  gap: clamp(44px, 7vw, 110px);
+  align-items: center;
+  margin: clamp(60px, 10vw, 150px) 0;
+  padding: clamp(40px, 6vw, 82px);
+  border: 1px solid rgba(241, 196, 95, 0.42);
+  background:
+    radial-gradient(circle at 88% 18%, rgba(241, 196, 95, 0.16), transparent 25rem),
+    linear-gradient(135deg, rgba(130, 244, 159, 0.055), transparent 55%),
+    var(--panel);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+}
+
+.support-copy h2 {
+  max-width: 760px;
+  margin-bottom: 28px;
+  font-family: var(--mono);
+  font-size: clamp(2.4rem, 4.6vw, 5rem);
+  font-weight: 500;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.support-copy > p:last-child {
+  max-width: 700px;
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.support-panel {
+  padding: clamp(24px, 4vw, 42px);
+  border: 1px solid rgba(130, 244, 159, 0.24);
+  background: rgba(7, 11, 8, 0.72);
+}
+
+.support-mark {
+  margin-bottom: 26px;
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: clamp(1.5rem, 2.4vw, 2.35rem);
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.support-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.support-primary {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: #171207;
+}
+
+.support-primary:hover,
+.support-primary:focus-visible {
+  background: #ffdb82;
+}
+
+.support-hint {
+  margin: 22px 0 0;
+  color: #8e998c;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.support-hint strong {
+  color: var(--green);
+  font-weight: 500;
+}
+
 .final-cta {
   position: relative;
   display: grid;
@@ -1178,7 +1255,8 @@ footer p {
 @media (max-width: 860px) {
   .section-heading,
   .section-grid,
-  .creator-section {
+  .creator-section,
+  .support-section {
     grid-template-columns: 1fr;
   }
 
@@ -1252,6 +1330,11 @@ footer p {
   }
 
   .creator-section {
+    margin: 60px 0;
+    padding: 34px 20px;
+  }
+
+  .support-section {
     margin: 60px 0;
     padding: 34px 20px;
   }

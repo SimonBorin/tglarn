@@ -18,6 +18,17 @@ Scan the QR code or follow the link above to start a game:
 
 ![Telegram QR code for @tglarnbot](docs/screenshots/tglarn-bot-qr.png)
 
+## Support Development
+
+> [!TIP]
+> TGLarn is free to play. If you enjoy it, you can help fund continued
+> development through **[Ko-fi](https://ko-fi.com/mrblooomberg)** or send
+> **Telegram Stars** from the bot.
+
+To send Stars, open the in-game menu and choose
+**⭐ Support Development ⭐**. Support is entirely optional and does not unlock
+gameplay benefits.
+
 ## The Game
 
 Larn is a classic turn-based roguelike about a parent searching for a cure for
