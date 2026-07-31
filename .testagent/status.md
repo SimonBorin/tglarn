@@ -141,3 +141,43 @@ No uncovered survivor was found in the bounded changed-code review.
 - The generated file has no assertion-free or trivial-only tests. Its
   assertions cover exact values and structure, negative absence, and observable
   side effects through awaited mock calls.
+
+## Game-over screenshot and public credits identity validation
+
+- Full suite: **218 passed**.
+- Focused suite:
+  `tests/test_animations.py tests/test_project_feedback_links.py` —
+  **11 passed**.
+- Ruff on both focused files and `git diff --check` — passed.
+
+### Requirement mapping
+
+- README screenshot heading, reference, and copied asset removal:
+  `test_readme_excludes_game_over_screenshot_and_asset`.
+- GitHub Pages screenshot heading, all textual site references, and copied
+  asset removal:
+  `test_pages_excludes_game_over_screenshot_and_asset`.
+- Public in-game creator identity and removal of both historical work markers:
+  `test_credits_include_bot_and_upstream_authors`.
+- Cached credit-frame invalidation after the identity change:
+  `test_public_creator_identity_invalidates_cached_credit_frames`.
+
+### Gap and assertion-quality review
+
+- README assertions explicitly reject both `End of a run` and
+  `tglarn-game-over.png`, then independently assert that the documentation
+  asset no longer exists.
+- Pages assertions scan every HTML, CSS, JavaScript, text, and XML source under
+  `site/`, explicitly reject both markers, and independently assert that the
+  Pages asset no longer exists.
+- Credits require the exact positive identity `@SimonBorin` and exact negative
+  identities `Simon.A.Borin` and `@ringcentral.com`; removing or weakening any
+  one of the three checks permits a plausible regression.
+- The exact `credits-v6` namespace assertion kills a stale-cache mutation that
+  would otherwise leave previously rendered work-email frames visible even
+  after `CREDIT_TEXTS` changes.
+- The shortened two-line creator credit required widening the existing rendered
+  text-height lower bound from 380 to 300 pixels; the remaining bounded
+  assertion still detects missing or severely compressed credit text.
+- No uncovered user-listed route or tautological assertion was found in the
+  bounded review.

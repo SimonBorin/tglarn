@@ -9,7 +9,7 @@ from pathlib import Path
 
 SPLASH_DELAY_SECONDS = 0.5
 CREDITS_DELAY_SECONDS = 1.2
-CREDITS_CACHE_NAMESPACE = "credits-v5"
+CREDITS_CACHE_NAMESPACE = "credits-v6"
 CREDITS_TITLE_FONT_SIZE = 74
 CREDITS_BODY_FONT_SIZE = 58
 CREDITS_MIN_BODY_FONT_SIZE = 44
@@ -29,7 +29,7 @@ SPLASH_CAPTIONS = (
 )
 
 CREDIT_TEXTS = (
-    "TGLarn Bot Creator\nSimon.A.Borin\n@ringcentral.com",
+    "TGLarn Bot Creator\n@SimonBorin",
     "Created by Codex",
     "Original Larn\nNoah Morgan",
     "ULarn\nPhil Cordier",

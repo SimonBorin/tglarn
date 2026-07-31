@@ -100,3 +100,17 @@ pairing run.
 - A photo-to-text Main Menu transition replaces the Telegram message. The
   replacement chat/message ID must become the active game message immediately;
   otherwise the next nested return is misclassified as context-free.
+
+## Game-over screenshot and public credits identity extension
+
+- README references the documentation screenshot under `docs/screenshots/`;
+  GitHub Pages references its own copy under `site/assets/`.
+- Preventing the removed screenshot from silently returning requires both
+  negative source assertions (`End of a run`, `tglarn-game-over.png`) and
+  absence checks for both copied assets.
+- `bot/tglarn_bot/animations.py` owns the actual in-game `CREDIT_TEXTS`.
+  The creator credit must use `@SimonBorin` and must exclude both historical
+  work-identity markers: `Simon.A.Borin` and `@ringcentral.com`.
+- Credit frames are cached under `CREDITS_CACHE_NAMESPACE`. Changing only
+  `CREDIT_TEXTS` without invalidating the old `credits-v5` namespace can keep
+  displaying previously rendered work-identity frames from `/tmp`.

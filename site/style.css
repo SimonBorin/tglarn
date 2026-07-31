@@ -786,11 +786,7 @@ section[id] {
 }
 
 .shot-store {
-  grid-column: span 8;
-}
-
-.shot-gameover {
-  grid-column: span 4;
+  grid-column: span 12;
 }
 
 .shot-open,
@@ -822,8 +818,7 @@ section[id] {
   padding: clamp(16px, 3vw, 36px);
 }
 
-.shot-store .shot-open img,
-.shot-gameover .shot-open img {
+.shot-store .shot-open img {
   padding: clamp(12px, 1.5vw, 20px);
   object-fit: contain;
   object-position: center;
@@ -1342,8 +1337,7 @@ footer p {
 
   .shot-map,
   .shot-controls,
-  .shot-store,
-  .shot-gameover {
+  .shot-store {
     grid-column: 1 / -1;
   }
 

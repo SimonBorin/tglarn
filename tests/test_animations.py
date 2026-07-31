@@ -20,14 +20,19 @@ def test_splash_uses_five_loading_frames() -> None:
 def test_credits_include_bot_and_upstream_authors() -> None:
     credits = "\n".join(CREDIT_TEXTS)
 
-    assert "Simon.A.Borin" in credits
-    assert "@ringcentral.com" in credits
+    assert "@SimonBorin" in credits
+    assert "Simon.A.Borin" not in credits
+    assert "@ringcentral.com" not in credits
     assert "Codex" in credits
     assert "Noah Morgan" in credits
     assert "Phil Cordier" in credits
     assert "Bridgit Spitznagel" in credits
     assert "Chris Reuter" in credits
     assert "Greg McIntyre" in credits
+
+
+def test_public_creator_identity_invalidates_cached_credit_frames() -> None:
+    assert CREDITS_CACHE_NAMESPACE == "credits-v6"
 
 
 def test_credits_use_larger_cached_frames() -> None:
@@ -48,7 +53,7 @@ def test_credits_use_larger_cached_frames() -> None:
 
     text_top = min(y for _, y in bright_text_pixels)
     text_bottom = max(y for _, y in bright_text_pixels)
-    assert 380 < text_bottom - text_top < 450
+    assert 300 < text_bottom - text_top < 450
 
 
 def test_splash_image_asset_is_packaged_in_source_tree() -> None:

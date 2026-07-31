@@ -8,6 +8,8 @@ _ROOT = Path(__file__).parents[1]
 _ISSUES_URL = "https://github.com/SimonBorin/tglarn/issues"
 _REPOSITORY_URL = "https://github.com/SimonBorin/tglarn"
 _PAGES_URL = "https://simonborin.github.io/tglarn/"
+_GAME_OVER_ASSET = "tglarn-game-over.png"
+_GAME_OVER_HEADING = "End of a run"
 
 
 class _VisibleHtmlParser(HTMLParser):
@@ -59,3 +61,23 @@ def test_bot_about_links_to_canonical_pages_site() -> None:
     about = ABOUT_TEXT.format(version="9.8.7")
 
     assert _PAGES_URL in about
+
+
+def test_readme_excludes_game_over_screenshot_and_asset() -> None:
+    readme = (_ROOT / "README.md").read_text()
+
+    assert _GAME_OVER_HEADING not in readme
+    assert _GAME_OVER_ASSET not in readme
+    assert not (_ROOT / "docs/screenshots" / _GAME_OVER_ASSET).exists()
+
+
+def test_pages_excludes_game_over_screenshot_and_asset() -> None:
+    page_sources = "\n".join(
+        path.read_text()
+        for path in (_ROOT / "site").rglob("*")
+        if path.is_file() and path.suffix in {".css", ".html", ".js", ".txt", ".xml"}
+    )
+
+    assert _GAME_OVER_HEADING not in page_sources
+    assert _GAME_OVER_ASSET not in page_sources
+    assert not (_ROOT / "site/assets" / _GAME_OVER_ASSET).exists()
