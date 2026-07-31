@@ -67,10 +67,6 @@ time, or dies in the dungeon.
 
 ![Store prompt inline keyboard](docs/screenshots/tglarn-store-prompt.png)
 
-### End of a run
-
-![Game-over credits screen](docs/screenshots/tglarn-game-over.png)
-
 ## How It Works
 
 TGLarn runs the original ReLarn C engine as an isolated game process and

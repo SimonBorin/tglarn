@@ -88,3 +88,16 @@
    chat/message identity is persisted before the next click.
 8. Run focused pytest and Ruff, then perform mutation-oriented gap and
    assertion-quality review.
+
+## Game-over screenshot and public credits identity extension
+
+1. Update the existing credits test to require `@SimonBorin` and explicitly
+   reject `Simon.A.Borin` and `@ringcentral.com`.
+2. Require a credits cache namespace newer than the historical `credits-v5`
+   value so existing rendered frames cannot preserve the removed identity.
+3. Add README and Pages regressions rejecting both `End of a run` and
+   `tglarn-game-over.png`.
+4. Assert the screenshot files are absent from both `docs/screenshots/` and
+   `site/assets/`, not merely unreferenced.
+5. Run the focused animation/static-page tests and Ruff, then record
+   requirement mapping and mutation-oriented assertion review.
